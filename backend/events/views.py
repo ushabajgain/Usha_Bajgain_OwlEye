@@ -4,6 +4,11 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Event, TicketPackage, EventLike
 from .serializers import EventSerializer, TicketPackageSerializer
+from accounts.serializers import UserSerializer
+from monitoring.models import ResponderLocation
+from django.utils import timezone
+from django.conf import settings
+from datetime import timedelta
 import json
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -34,9 +39,14 @@ class EventListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         if user.is_authenticated:
             if user.role == 'admin':
-                return Event.objects.exclude(status='cancelled').order_by('-created_at')
-            if user.role in ['organizer', 'volunteer', 'authority']:
-                return Event.objects.filter(organizer=user).exclude(status='cancelled').order_by('-created_at')
+                return Event.objects.order_by('-created_at')
+            if user.role == 'organizer':
+                # Organizers see ONLY their own events
+                return Event.objects.filter(organizer=user).order_by('-created_at')
+            if user.role in ['volunteer', 'authority']:
+                # Show all active events to volunteers and authorities
+                return Event.objects.filter(status='active').order_by('-created_at')
+        # Unauthenticated users see only active events
         return Event.objects.filter(status='active').order_by('-created_at')
 
     def perform_create(self, serializer):
@@ -85,7 +95,7 @@ class EventListCreateView(generics.ListCreateAPIView):
 
 
 class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Event.objects.exclude(status='cancelled')
+    queryset = Event.objects.all()
     serializer_class = EventSerializer
     permission_classes = [IsOrganizerActive]
 
@@ -132,9 +142,8 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
     def perform_destroy(self, instance):
-        instance.status = 'cancelled'
-        instance.save()
         self.broadcast_event(instance, 'deleted')
+        instance.delete()
 
 
     def delete(self, request, *args, **kwargs):
@@ -197,3 +206,46 @@ class ToggleLikeView(APIView):
             'is_liked': is_liked,
             'like_count': event.likes.count()
         })
+
+
+class EventVolunteersView(APIView):
+    """
+    ✅ EVENT-SCOPED VOLUNTEERS (With Active Event + Recent Location Checks)
+    Returns only volunteers assigned to a specific event via ResponderLocation
+    
+    GET /events/{event_id}/volunteers/
+    Returns list of volunteers where:
+    - is_active=True in ResponderLocation
+    - Event is currently active (start_datetime <= now < end_datetime)
+    - Volunteer has sent location data in last 5 minutes
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, event_id):
+        try:
+            event = Event.objects.get(pk=event_id)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        now = timezone.now()
+        
+        # ⚠️ PRODUCTION: Use configurable recency window from settings
+        recency_minutes = getattr(settings, 'LOCATION_RECENCY_MINUTES', 5)
+        recency_cutoff = now - timedelta(minutes=recency_minutes)
+
+        # Get all active ResponderLocation entries for this event with validation
+        # GAP 1 FIX: Ensure event is currently active
+        # GAP 2 FIX: Ensure volunteer has recent location data (within LOCATION_RECENCY_MINUTES)
+        responder_locations = ResponderLocation.objects.filter(
+            event_id=event_id,
+            is_active=True,
+            event__start_datetime__lte=now,     # Event started
+            event__end_datetime__gt=now,        # Event not ended (using __gt for consistency)
+            last_updated__gte=recency_cutoff    # Location data within recency window
+        ).select_related('user')
+
+        # Extract unique volunteers
+        volunteers = [rl.user for rl in responder_locations]
+        
+        serializer = UserSerializer(volunteers, many=True)
+        return Response(serializer.data)

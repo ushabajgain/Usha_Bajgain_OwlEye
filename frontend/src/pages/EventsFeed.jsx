@@ -124,6 +124,8 @@ const EventsFeed = () => {
             await api.delete(`/events/${deleteConfirmId}/`);
             setEvents(events.filter(e => e.id !== deleteConfirmId));
             setDeleteConfirmId(null);
+            // Notify other tabs/pages of deletion
+            localStorage.setItem('event_deleted', JSON.stringify({ id: deleteConfirmId, timestamp: Date.now() }));
         } catch (err) {
             alert('Failed to delete event.');
         } finally {
@@ -188,10 +190,10 @@ const EventsFeed = () => {
                     </div>
                     {isOrganizer && (
                         <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
-                            <Link to={`/organizer/edit-event/${evt.id}`} onClick={e => e.stopPropagation()}
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/organizer/edit-event/${evt.id}`); }}
                                 style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309', border: 'none', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
                                 <Edit size={14} />
-                            </Link>
+                            </button>
                             <button onClick={e => { e.preventDefault(); e.stopPropagation(); setDeleteConfirmId(evt.id); }}
                                 style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', border: 'none', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
                                 <Trash2 size={14} />
@@ -287,10 +289,10 @@ const EventsFeed = () => {
                 </div>
                 {isOrganizer && (
                     <div style={{ display: 'flex', gap: 4 }}>
-                        <Link to={`/organizer/edit-event/${evt.id}`} onClick={e => e.stopPropagation()}
-                            style={{ width: 32, height: 32, borderRadius: 8, background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/organizer/edit-event/${evt.id}`); }}
+                            style={{ width: 32, height: 32, borderRadius: 8, background: '#fef3c7', color: '#b45309', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Edit size={14} />
-                        </Link>
+                        </button>
                         <button onClick={e => { e.preventDefault(); e.stopPropagation(); setDeleteConfirmId(evt.id); }}
                             style={{ width: 32, height: 32, borderRadius: 8, background: '#fee2e2', color: '#dc2626', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Trash2 size={14} />

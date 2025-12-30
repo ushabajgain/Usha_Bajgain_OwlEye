@@ -218,4 +218,38 @@ STRIPE_PUBLISHABLE_KEY = 'pk_test_51TAXAdP0ygmVjBNuYnte929kOcokDkhsHn0XWKrRV1SY0
 STRIPE_WEBHOOK_SECRET = ''  # Set this after configuring webhook in Stripe Dashboard
 FRONTEND_URL = 'http://localhost:5173'
 
+# ⚠️ PRODUCTION DISPATCH SYSTEM SETTINGS
+# These settings control critical behavior for the real-time SOS dispatch system
+
+# Location Recency Window (minutes)
+# Volunteers without location update within this window are excluded from dispatch
+# Too strict (5) → volunteers disappear randomly
+# Too loose (15) → inactive volunteers still routable
+# Production: 5 minutes is standard for emergency dispatch
+LOCATION_RECENCY_MINUTES = int(os.getenv('LOCATION_RECENCY_MINUTES', '5'))
+
+# SOS Creation Cooldown (seconds)
+# Prevents users from spamming SOS alerts
+# If user creates SOS within cooldown of last SOS, request is rejected
+# Production: 30 seconds prevents spam while allowing legitimate re-SOS
+SOS_CREATION_COOLDOWN_SECONDS = int(os.getenv('SOS_CREATION_COOLDOWN_SECONDS', '30'))
+
+# Fallback Volunteer Limit
+# When no volunteers within proximity radius, broadcast to these many closest volunteers
+# Too high (200) → broadcast storm, network overload
+# Too low (3) → SOS might not reach anyone
+# Production: 10 balances reach vs. broadcast efficiency
+FALLBACK_VOLUNTEER_LIMIT = int(os.getenv('FALLBACK_VOLUNTEER_LIMIT', '10'))
+
+# SOS Proximity Radius (kilometers)
+# Volunteers within this distance are targeted for proximity-based SOS
+# Standard emergency dispatch uses 2km for foot/bike responders
+SOS_PROXIMITY_RADIUS_KM = float(os.getenv('SOS_PROXIMITY_RADIUS_KM', '2.0'))
+
+# Maximum Active SOS (System Protection)
+# Prevents queue explosion under extreme stress
+# If exceeded, new SOS rejected until queue drains
+# Typical event: 1-2 concurrent, stress test: 50+
+MAX_ACTIVE_SOS = int(os.getenv('MAX_ACTIVE_SOS', '50'))
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

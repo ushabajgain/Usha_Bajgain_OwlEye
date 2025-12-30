@@ -257,43 +257,89 @@ const CreateEvent = () => {
             return;
         }
 
+        if (!location || !location.lat || !location.lng) {
+            setError('Location is required. Please pin your event on the map.');
+            return;
+        }
 
         setLoading(true);
         try {
+            // Create FormData for file upload
             const uploadData = new FormData();
-            Object.keys(formData).forEach(key => uploadData.append(key, formData[key]));
+
+            // Append all form fields
+            Object.keys(formData).forEach(key => {
+                if (formData[key] !== null && formData[key] !== undefined && formData[key] !== '') {
+                    uploadData.append(key, formData[key]);
+                }
+            });
+
+            // Set event status
             uploadData.set('status', statusToSave);
+
+            // Append location coordinates
             uploadData.append('latitude', parseFloat(location.lat).toFixed(6));
             uploadData.append('longitude', parseFloat(location.lng).toFixed(6));
-            if (imageFile) uploadData.append('image', imageFile);
-            if (seatPlanFile) uploadData.append('seat_plan_image', seatPlanFile);
 
-            const validPackages = packages.filter(p => p.name.trim() && p.price);
+            // Append files if present
+            if (imageFile) {
+                uploadData.append('image', imageFile);
+            }
+            if (seatPlanFile) {
+                uploadData.append('seat_plan_image', seatPlanFile);
+            }
+
+            // Append ticket packages as JSON
+            const validPackages = packages.filter(p => p.name && p.name.trim() && p.price);
+            if (validPackages.length === 0) {
+                setFieldErrors({ packages: 'At least one ticket package is required.' });
+                setLoading(false);
+                return;
+            }
             uploadData.append('ticket_packages', JSON.stringify(validPackages));
 
-            await api.post('/events/', uploadData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            setSuccessMsg('Event created successfully!');
-            setTimeout(() => navigate('/events'), 1200);
+            // POST request WITHOUT manually setting Content-Type header
+            // axios/fetch will automatically set multipart/form-data with correct boundary
+            const response = await api.post('/events/', uploadData);
+
+            setSuccessMsg('Event created successfully! Redirecting...');
+            setTimeout(() => {
+                navigate('/events');
+            }, 1500);
         } catch (err) {
+            console.error('Event creation error:', err);
             const backendData = err.response?.data;
+
             if (backendData && typeof backendData === 'object') {
                 const sErrors = {};
+
+                // Handle non-field errors
                 if (backendData.non_field_errors) {
-                    setError(backendData.non_field_errors[0]);
+                    setError(Array.isArray(backendData.non_field_errors) ? backendData.non_field_errors[0] : backendData.non_field_errors);
                 }
+
+                // Handle field-specific errors
                 Object.keys(backendData).forEach(key => {
-                    if (key !== 'non_field_errors') {
+                    if (key !== 'non_field_errors' && key !== 'detail') {
                         sErrors[key] = Array.isArray(backendData[key]) ? backendData[key][0] : backendData[key];
                     }
                 });
+
                 setFieldErrors(sErrors);
-                if (!error) {
+
+                if (!error && Object.keys(sErrors).length > 0) {
                     const firstMsg = Object.values(sErrors)[0];
-                    setError(firstMsg || 'Could not create event.');
+                    setError(firstMsg || 'Could not create event. Please check your input.');
                 }
+            } else if (err.response?.status === 401) {
+                setError('Unauthorized. Please log in again.');
+                navigate('/login');
+            } else if (err.response?.status === 403) {
+                setError('Only organizers can create events.');
             } else {
-                setError('Error: Could not create event. Please check your connection.');
+                setError(err.message || 'Error: Could not create event. Please check your connection and try again.');
             }
+
             setLoading(false);
         }
     };
@@ -416,7 +462,7 @@ const CreateEvent = () => {
                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, padding: '12px 18px', borderRadius: 8, border: `1.5px solid ${fieldErrors.location ? '#ef4444' : ACCENT}`, background: location ? '#eff6ff' : '#f8fafc', color: location ? ACCENT : TEXT_MID, fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', transition: 'all 0.15s', overflow: 'hidden' }}>
                                             <MapPin size={16} color={location ? ACCENT : TEXT_MID} strokeWidth={2} style={{ flexShrink: 0 }} />
                                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {location ? (formData.venue_address || `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`) : 'Click to pick location on map'}
+                                                {location ? (formData.venue_address || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`) : 'Click to pick location on map'}
                                             </span>
                                         </button>
                                         <ErrorTip msg={fieldErrors.location} />
@@ -609,7 +655,7 @@ const CreateEvent = () => {
                         <div style={{ padding: '14px 20px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ fontSize: 13, color: TEXT_MID }}>
                                 {location ? (
-                                    <span>📍 <strong>{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</strong></span>
+                                    <span><strong>{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</strong></span>
                                 ) : (
                                     <span>No location selected</span>
                                 )}

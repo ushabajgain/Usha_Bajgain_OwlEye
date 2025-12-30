@@ -192,7 +192,7 @@ const Bookings = () => {
                                 <button style={s.filterBtn}>This Week <ChevronDown size={14} /></button>
                             </div>
                             <div style={{ height: 260 }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={200}>
                                     <AreaChart data={trendData}>
                                         <defs>
                                             <linearGradient id="colorArea" x1="0" y1="0" x2="0" y2="1">
@@ -220,7 +220,7 @@ const Bookings = () => {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
                                 <div style={{ position: 'relative', width: 140, height: 140 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={140} minHeight={140}>
                                         <PieChart>
                                             <Pie data={categoryData} innerRadius={45} outerRadius={60} paddingAngle={5} dataKey="value">
                                                 {categoryData.map((entry, index) => <Cell key={index} fill={entry.color} />)}

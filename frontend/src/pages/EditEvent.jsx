@@ -311,11 +311,20 @@ const EditEvent = () => {
             const allPkgs = getPackages();
             uploadData.append('ticket_packages', JSON.stringify(allPkgs));
 
-            await api.put(`/events/${id}/`, uploadData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            setSuccessMsg('Changes saved successfully!');
-            setTimeout(() => navigate('/events'), 1200);
+            // Use PATCH for partial updates and do NOT manually set Content-Type header
+            // Let axios/fetch auto-set multipart/form-data with proper boundary
+            await api.patch(`/events/${id}/`, uploadData);
+            
+            setSuccessMsg('Event updated successfully! Redirecting...');
+            setTimeout(() => {
+                navigate('/events');
+            }, 1500);
         } catch (err) {
-            setError(err.response?.data?.detail || 'Could not update event.');
+            console.error('Event update error:', err);
+            const errorMsg = err.response?.data?.detail || 
+                           err.response?.data?.message ||
+                           'Could not update event. Please check your inputs.';
+            setError(errorMsg);
             setSubmitting(false);
         }
     };
@@ -417,7 +426,7 @@ const EditEvent = () => {
                                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderRadius: 8, border: `1.5px solid ${fieldErrors.location ? '#ef4444' : ACCENT}`, background: location ? '#eff6ff' : '#f8fafc', color: location ? ACCENT : TEXT_MID, fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%', textAlign: 'left' }}>
                                         <MapPin size={16} />
                                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {location ? (formData.venue_address || `📍 ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`) : 'Click to pick location'}
+                                            {location ? (formData.venue_address || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`) : 'Click to pick location'}
                                         </span>
                                     </button>
                                 </div>

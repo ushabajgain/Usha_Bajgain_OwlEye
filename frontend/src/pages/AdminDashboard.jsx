@@ -74,15 +74,58 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await api.get('/events/');
-                setEvents(res.data);
-                if (!targetEventId && res.data.length > 0) {
-                    setTargetEventId(res.data[0].id.toString());
+                const [eventsRes, usersRes, ordersRes] = await Promise.all([
+                    api.get('/events/'),
+                    api.get('/accounts/all-users/'),
+                    api.get('/tickets/organizer-orders/')
+                ]);
+                
+                setEvents(eventsRes.data);
+                
+                // Calculate stats
+                const totalUsers = Array.isArray(usersRes.data) ? usersRes.data.length : 0;
+                const totalBookings = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+                const totalRevenue = totalBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
+                
+                setStats({
+                    total_users: totalUsers,
+                    active_events: eventsRes.data.length,
+                    total_revenue: Math.round(totalRevenue),
+                    security_alerts: 0
+                });
+                
+                if (!targetEventId && eventsRes.data.length > 0) {
+                    setTargetEventId(eventsRes.data[0].id.toString());
                 }
             } catch (err) { console.error(err); }
             finally { setLoading(false); }
         };
         fetchData();
+
+        // Poll for changes every 30 seconds
+        const pollInterval = setInterval(() => {
+            fetchData();
+        }, 30000);
+
+        // Listen for cross-tab deletions
+        const handleStorageChange = () => {
+            fetchData();
+        };
+        window.addEventListener('storage', handleStorageChange);
+
+        // Listen for visibility changes (when user returns to tab)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchData();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(pollInterval);
+            window.removeEventListener('storage', handleStorageChange);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, []);
 
     // Sync stats with real-time data
@@ -153,7 +196,7 @@ const AdminDashboard = () => {
                                 <TrendingUp size={20} color={ACCENT} />
                             </div>
                             <div style={{ height: 300 }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
                                     <AreaChart data={activityData}>
                                         <defs>
                                             <linearGradient id="colorLogins" x1="0" y1="0" x2="0" y2="1">
