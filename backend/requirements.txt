@@ -1,0 +1,15 @@
+Django==4.2.16
+djangorestframework==3.17.1
+djangorestframework_simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-axes==8.3.1
+django-filter==24.3
+channels==4.3.2
+channels_redis==4.3.0
+daphne==4.2.1
+pillow==12.2.0
+redis==7.4.0
+stripe==15.0.1
+python-dotenv==1.2.2
+PyMySQL==1.1.2
+requests==2.33.1
