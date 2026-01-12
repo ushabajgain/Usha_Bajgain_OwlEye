@@ -1,7 +1,9 @@
 import redis
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import viewsets, permissions, views
 from rest_framework.response import Response
 from .models import Incident, SOSAlert, SafetyAlert, ResponderLocation, IncidentLog, SOSLog, Notification
@@ -11,9 +13,15 @@ from .serializers import (
     NotificationSerializer
 )
 from .utils import log_incident_action, log_sos_action, reverse_geocode, send_notification
+from .metrics import sos_metrics
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from tickets.models import Ticket
+from accounts.models import User
+from events.models import Event
+
+# Configure logging for SOS dispatch
+logger = logging.getLogger('owl_eye.dispatch')
 
 class ReverseGeocodeView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -31,19 +39,24 @@ class EventOverviewView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, event_id):
-        # Stats
         scanned_tickets = Ticket.objects.filter(event_id=event_id, status='scanned').count()
         total_tickets = Ticket.objects.filter(event_id=event_id).count()
         
-        # Incident doesn't have is_active, we use status
+        unique_attendees = Ticket.objects.filter(event_id=event_id).values_list('user_id', flat=True).distinct().count()
+        
+        active_volunteers = ResponderLocation.objects.filter(
+            event_id=event_id,
+            is_active=True,
+            user__role='volunteer'
+        ).count()
+        
         active_incidents = Incident.objects.filter(
             event_id=event_id
-        ).exclude(status__in=['resolved', 'false']).count()
+        ).exclude(status__in=['resolved', 'cancelled']).count()
         
-        # SOSAlert has status choices. Active SOS is status='active' (or pending)
         active_sos = SOSAlert.objects.filter(
             event_id=event_id, 
-            status__in=['active', 'acknowledged']
+            status__in=['reported', 'assigned', 'in_progress']
         ).count()
         
         online_responders = ResponderLocation.objects.filter(
@@ -54,6 +67,8 @@ class EventOverviewView(views.APIView):
         return Response({
             'scanned_tickets': scanned_tickets,
             'total_tickets': total_tickets,
+            'unique_attendees': unique_attendees,
+            'active_volunteers': active_volunteers,
             'active_incidents': active_incidents,
             'active_sos': active_sos,
             'online_responders': online_responders,
@@ -67,17 +82,241 @@ class CurrentLocationsView(views.APIView):
         locations_key = f"event:{event_id}:locations"
         all_locations = redis_client.hgetall(locations_key)
         
+        # MVP: Support filtering for responders/volunteers only
+        responders_only = request.query_params.get('responders_only', 'false').lower() == 'true'
+        
         results = []
-        for user_id, data_str in all_locations.items():
+        ghost_users_removed = []
+        
+        for user_id_str, data_str in all_locations.items():
             try:
-                results.append(json.loads(data_str))
-            except:
+                # Safely parse user_id
+                try:
+                    user_id = int(user_id_str)
+                except (ValueError, TypeError):
+                    redis_client.hdel(locations_key, user_id_str)
+                    continue
+                
+                loc_data = json.loads(data_str)
+                
+                if not User.objects.filter(id=user_id).exists():
+                    redis_client.hdel(locations_key, user_id_str)
+                    ghost_users_removed.append({
+                        'user_id': user_id,
+                        'name': loc_data.get('name', 'Unknown')
+                    })
+                    continue
+                
+                if responders_only and loc_data.get('role') != 'volunteer':
+                    continue
+                    
+                results.append(loc_data)
+            except (ValueError, json.JSONDecodeError) as e:
                 pass
+        
+        if ghost_users_removed:
+            print(f"🚫 Removed {len(ghost_users_removed)} ghost user(s) from event {event_id}:")
+            for gu in ghost_users_removed:
+                print(f"   - {gu['name']} (ID: {gu['user_id']})")
         
         return Response(results)
 
 import html
 from django.utils import timezone
+
+
+def check_volunteer_active_event_conflict(volunteer, excluding_event_id):
+    """
+    ✅ EVENT-LEVEL CONSTRAINT: Check if volunteer is assigned to another ACTIVE event
+    
+    A volunteer can only be assigned to ONE ACTIVE EVENT at a time.
+    
+    Args:
+        volunteer: User object with role='volunteer'
+        excluding_event_id: Current event ID to exclude from check
+    
+    Returns:
+        dict with 'has_conflict' and 'conflicting_event' info, or None if no conflict
+    """
+    now = timezone.now()
+    
+    # 1. Check if volunteer has any active ResponderLocation in other events
+    active_responder_locations = ResponderLocation.objects.filter(
+        user=volunteer,
+        is_active=True
+    ).exclude(event_id=excluding_event_id).select_related('event')
+    
+    for location in active_responder_locations:
+        # Is that event currently active? (within start/end datetime)
+        # Use < for end_datetime to avoid blocking at exact transition time
+        if location.event.start_datetime <= now < location.event.end_datetime:
+            return {
+                'has_conflict': True,
+                'conflicting_event_id': location.event.id,
+                'conflicting_event_name': location.event.name,
+                'reason': 'volunteer_already_at_another_event'
+            }
+    
+    # 2. Check if volunteer has any active assignments in other ACTIVE events
+    # Use __gt (not __gte) for end_datetime to clean cutoff at event end
+    active_events = Event.objects.filter(
+        start_datetime__lte=now,
+        end_datetime__gt=now
+    ).exclude(id=excluding_event_id)
+    
+    # Check incidents in those active events
+    conflicting_incident = Incident.objects.filter(
+        assigned_volunteer=volunteer,
+        event__in=active_events,
+        is_active=True
+    ).select_related('event').first()
+    
+    if conflicting_incident:
+        return {
+            'has_conflict': True,
+            'conflicting_event_id': conflicting_incident.event.id,
+            'conflicting_event_name': conflicting_incident.event.name,
+            'reason': 'volunteer_has_active_incident_in_another_event'
+        }
+    
+    # Check SOS in those active events
+    conflicting_sos = SOSAlert.objects.filter(
+        assigned_volunteer=volunteer,
+        event__in=active_events,
+        status__in=['reported', 'assigned', 'in_progress']
+    ).select_related('event').first()
+    
+    if conflicting_sos:
+        return {
+            'has_conflict': True,
+            'conflicting_event_id': conflicting_sos.event.id,
+            'conflicting_event_name': conflicting_sos.event.name,
+            'reason': 'volunteer_has_active_sos_in_another_event'
+        }
+    
+    # No conflict found
+    return None
+
+
+def calculate_haversine_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great circle distance between two points on the earth (in kilometers)
+    
+    Args:
+        lat1, lon1: Coordinates of first point (in decimal degrees)
+        lat2, lon2: Coordinates of second point (in decimal degrees)
+    
+    Returns:
+        Distance in kilometers
+    """
+    from math import radians, cos, sin, asin, sqrt
+    
+    # Convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    r = 6371  # Radius of earth in kilometers
+    
+    return c * r
+
+
+def find_nearby_volunteers(latitude, longitude, event_id, radius_km=None):
+    """
+    🎯 STEP 5.3.1 — Find nearby volunteers for SOS proximity broadcasting
+    
+    Gets eligible responders with:
+    - Same event_id
+    - is_active=True
+    - Event currently active (start_datetime <= now < end_datetime)
+    - Location data recent (last_updated within LOCATION_RECENCY_MINUTES)
+    - Not currently handling another active incident/SOS ⚠️ NEW
+    - Within proximity radius (default from settings)
+    
+    ⚠️ PRODUCTION NOTES:
+    This function is designed for real-time dispatch systems and respects:
+    - LOCATION_RECENCY_MINUTES: Configurable window (default 5 min)
+    - SOS_PROXIMITY_RADIUS_KM: Geographic radius for targeting (default 2 km)
+    - FALLBACK_VOLUNTEER_LIMIT: Max volunteers when no nearby (default 10)
+    
+    Fallback: If no one within radius, returns closest N volunteers
+    
+    Args:
+        latitude: SOS alert latitude
+        longitude: SOS alert longitude
+        event_id: Event ID
+        radius_km: Search radius in kilometers (default from settings.SOS_PROXIMITY_RADIUS_KM)
+    
+    Returns:
+        List of tuples: [(user_object, distance_km), ...]
+        If no nearby responders, returns up to FALLBACK_VOLUNTEER_LIMIT closest volunteers
+    """
+    from django.utils import timezone
+    from django.conf import settings
+    
+    now = timezone.now()
+    
+    # Use configurable recency window from settings (default 5 min)
+    recency_minutes = getattr(settings, 'LOCATION_RECENCY_MINUTES', 5)
+    recency_cutoff = now - timedelta(minutes=recency_minutes)
+    
+    # Use configurable proximity radius from settings (default 2 km)
+    if radius_km is None:
+        radius_km = getattr(settings, 'SOS_PROXIMITY_RADIUS_KM', 2.0)
+    
+    # Get all eligible responders with our improved filters
+    # (GAP 1 + GAP 2 fixes applied)
+    eligible_responders = ResponderLocation.objects.filter(
+        event_id=event_id,
+        is_active=True,
+        event__start_datetime__lte=now,
+        event__end_datetime__gt=now,
+        last_updated__gte=recency_cutoff
+    ).select_related('user', 'event')
+    
+    # ⚠️ PRODUCTION FIX: Filter out volunteers already handling active incidents
+    # This prevents sending SOS to a volunteer who's already engaged
+    eligible_responders = eligible_responders.exclude(
+        user__assigned_incidents__status__in=['pending', 'verified', 'responding']
+    ).exclude(
+        user__sosalert__status__in=['assigned', 'in_progress']
+    ).distinct()
+    
+    # Calculate distances for each responder
+    nearby_volunteers = []
+    all_distances = []  # Keep track of all for fallback
+    
+    for responder in eligible_responders:
+        if responder.latitude is None or responder.longitude is None:
+            continue
+            
+        distance_km = calculate_haversine_distance(
+            latitude, longitude,
+            float(responder.latitude), float(responder.longitude)
+        )
+        
+        all_distances.append((responder.user, distance_km))
+        
+        # Filter by radius for primary list
+        if distance_km <= radius_km:
+            nearby_volunteers.append((responder.user, distance_km))
+    
+    # Sort by distance (closest first)
+    nearby_volunteers.sort(key=lambda x: x[1])
+    all_distances.sort(key=lambda x: x[1])
+    
+    # Fallback: If no one nearby, return closest N volunteers
+    # ⚠️ PRODUCTION FIX: Limit fallback to prevent broadcast storm
+    if not nearby_volunteers and all_distances:
+        fallback_limit = getattr(settings, 'FALLBACK_VOLUNTEER_LIMIT', 10)
+        nearby_volunteers = all_distances[:fallback_limit]
+        print(f"[SOS_FALLBACK] No nearby volunteers. Broadcasting to {len(nearby_volunteers)} closest.")
+    
+    return nearby_volunteers
+
 
 class IncidentViewSet(viewsets.ModelViewSet):
     queryset = Incident.objects.filter(is_active=True).order_by('-created_at')
@@ -95,6 +334,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
         reporter = self.request.user
         data = self.request.data
         from django.core.cache import cache
+        cache_key = f"incident_report_{reporter.id}"
         if cache.get(cache_key):
              from rest_framework.exceptions import Throttled
              raise Throttled(detail="Please wait 30 seconds before submitting another incident report.")
@@ -116,35 +356,21 @@ class IncidentViewSet(viewsets.ModelViewSet):
         try:
             location_data = enrich_location(lat, lon, gps_accuracy=data.get('gps_accuracy'))
         except Exception as e:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(f"Location enrichment failed: {e}")
+            # MVP: If enrichment fails, use minimal data
+            location_data = {
+                "latitude": lat,
+                "longitude": lon,
+                "accuracy": data.get('gps_accuracy', 50),
+                "source": "gps"
+            }
         
         accuracy = data.get('gps_accuracy')
         if accuracy and float(accuracy) > 100:
             pass
 
-        # 3. Duplicate Detection (Instant Redis GEORADIUS)
-        import redis
-        redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=False)
-        incidents_key = f"event:{event_id}:incidents"
-        
-        nearby_incidents = redis_client.georadius(
-            incidents_key,
-            lon,
-            lat,
-            50,
-            unit='m'
-        )
-        
+        # MVP: Duplicate detection disabled for demo
         duplicate_of = None
-        if nearby_incidents:
-            member_id = nearby_incidents[0].decode('utf-8') if isinstance(nearby_incidents[0], bytes) else nearby_incidents[0]
-            try:
-                duplicate_of = Incident.objects.get(id=member_id)
-            except:
-                pass
-
-        is_duplicate = duplicate_of is not None
+        is_duplicate = False
 
         location_name = location_data.get('display_name') if location_data else (
             self.request.data.get('location_name') or reverse_geocode(lat, lon)
@@ -158,27 +384,19 @@ class IncidentViewSet(viewsets.ModelViewSet):
             title=title,
             description=description,
             status=initial_status,
-            parent_incident=duplicate_of if is_duplicate else None,
+            parent_incident=None,
             location_data=location_data,
             location_name=location_name,
             verified_at=timezone.now() if initial_status == 'verified' else None
         )
         
-        if not is_duplicate:
-            redis_client.execute_command('GEOADD', incidents_key, lon, lat, str(incident.id))
-        else:
-            from django.db.models import F
-            Incident.objects.filter(pk=incident.id).update(confidence_score=F('confidence_score') + 1)
-            Incident.objects.filter(pk=duplicate_of.id).update(confidence_score=F('confidence_score') + 1)
-        
         # 5. Selective Notifications
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
-        if not is_duplicate:
-            staff = User.objects.filter(role__in=['organizer', 'admin'])
-            for s in staff:
-                send_notification(s, f"New Incident: {incident.title}", f"Reported at {incident.location_name}.", 'incident', incident.event)
+        staff = User.objects.filter(role__in=['organizer', 'admin'])
+        for s in staff:
+            send_notification(s, f"New Incident: {incident.title}", f"Reported at {incident.location_name}.", 'incident', incident.event)
 
         log_incident_action(incident, 'reported', reporter, new_status=incident.status)
         self.broadcast_incident(incident, 'new_incident')
@@ -187,6 +405,37 @@ class IncidentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         old_instance = Incident.objects.get(pk=serializer.instance.pk)
         new_status = self.request.data.get('status')
+        assigned_volunteer_id = self.request.data.get('assigned_volunteer')
+        
+        # ✅ EVENT-LEVEL + TASK-LEVEL CONSTRAINT: Volunteer can only be assigned to ONE ACTIVE event at a time
+        if assigned_volunteer_id and assigned_volunteer_id != (old_instance.assigned_volunteer.id if old_instance.assigned_volunteer else None):
+            # Volunteer is being assigned to this incident (new assignment or change)
+            try:
+                volunteer = User.objects.get(id=assigned_volunteer_id)
+            except User.DoesNotExist:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"assigned_volunteer": "Volunteer not found."})
+            
+            # ✅ STRICT SCOPE CHECK: Volunteer must belong to the SAME event as the incident
+            volunteer_in_event = ResponderLocation.objects.filter(
+                user=volunteer,
+                event_id=old_instance.event_id,
+                is_active=True
+            ).exists()
+            
+            if not volunteer_in_event:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({
+                    "assigned_volunteer": "Volunteer must be assigned to the same event as this incident. They cannot be assigned across events."
+                })
+            
+            # Check for EVENT-level conflict (volunteer already assigned to another ACTIVE event)
+            conflict_info = check_volunteer_active_event_conflict(volunteer, old_instance.event_id)
+            if conflict_info and conflict_info['has_conflict']:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({
+                    "assigned_volunteer": f"Volunteer is already assigned to {conflict_info['conflicting_event_name']} event. They can only handle one active event at a time."
+                })
         
         # 1. Role-based Status Transitions
         if new_status and new_status != old_instance.status:
@@ -286,14 +535,76 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
         # Check if user is volunteer
         if user.role != 'volunteer':
             return Response({"error": "Only volunteers can accept SOS alerts."}, status=403)
+        
+        # ✅ STEP 5.3.3 GUARD: Prevent accepting already-assigned SOS
+        if sos.assigned_volunteer:
+            # ⚠️ PRODUCTION IMPROVEMENT: Return who accepted for better UX
+            # ✅ LOG METRICS: Track 409 conflicts
+            sos_metrics.log_sos_conflict(
+                sos_id=sos.id,
+                first_volunteer=sos.assigned_volunteer.full_name,
+                second_volunteer=user.full_name
+            )
             
-        # Prevent parallel acceptance Race Conditions
-        if sos.assigned_volunteer and sos.assigned_volunteer != user:
-             return Response({"error": "This SOS was just accepted by another volunteer."}, status=409)
+            return Response({
+                "error": f"Already accepted by {sos.assigned_volunteer.full_name}",
+                "assigned_volunteer_name": sos.assigned_volunteer.full_name,
+                "assigned_volunteer_id": sos.assigned_volunteer.id,
+                "status_code": "sos_already_accepted"
+            }, status=409)
+            
+        # ✅ STRICT SCOPE CHECK: Volunteer must be in the same event as the SOS
+        volunteer_in_event = ResponderLocation.objects.filter(
+            user=user,
+            event_id=sos.event_id,
+            is_active=True
+        ).exists()
+        
+        if not volunteer_in_event:
+            return Response({
+                "error": "You are not assigned to this event. You can only accept SOS alerts from your assigned event.",
+                "status_code": "volunteer_not_in_event"
+            }, status=403)
+        
+        # ✅ EVENT-LEVEL CONSTRAINT: Check if volunteer is already assigned to another ACTIVE event
+        conflict_info = check_volunteer_active_event_conflict(user, sos.event_id)
+        if conflict_info and conflict_info['has_conflict']:
+            return Response({
+                "error": f"You are already assigned to {conflict_info['conflicting_event_name']} event. You can only handle one active event at a time.",
+                "status_code": "volunteer_busy"
+            }, status=409)
             
         sos.assigned_volunteer = user
         sos.status = 'assigned'
         sos.save()
+        
+        # ✅ LOG METRICS: Track acceptance with distance and response time
+        try:
+            # Calculate distance from volunteer location to SOS location
+            volunteer_location = ResponderLocation.objects.filter(
+                user=user, 
+                event_id=sos.event_id,
+                is_active=True
+            ).first()
+            
+            distance_km = None
+            if volunteer_location and volunteer_location.latitude and volunteer_location.longitude:
+                distance_km = calculate_haversine_distance(
+                    float(sos.latitude), float(sos.longitude),
+                    float(volunteer_location.latitude), float(volunteer_location.longitude)
+                )
+            
+            # Calculate response time (time since SOS creation)
+            acceptance_time = (timezone.now() - sos.created_at).total_seconds()
+            
+            sos_metrics.log_sos_accepted(
+                sos_id=sos.id,
+                volunteer_name=user.full_name,
+                distance_km=distance_km or 0,
+                acceptance_seconds=acceptance_time
+            )
+        except Exception as e:
+            logger.error(f"[METRICS_ERROR] Failed to log SOS acceptance metrics: {e}")
         
         # Notify the Attendee
         send_notification(
@@ -343,6 +654,13 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
         sos.status = 'resolved'
         sos.is_active = False
         sos.save()
+        
+        # 🎯 LOG COMPLETION: Log total response time from SOS creation to resolution
+        completion_seconds = (timezone.now() - sos.created_at).total_seconds()
+        sos_metrics.log_sos_completed(
+            sos_id=sos.id,
+            completion_seconds=completion_seconds
+        )
 
         send_notification(
             sos.user,
@@ -383,6 +701,29 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
         nearest_volunteer = self.find_nearest_volunteer(lat, lon, event_id)
         
         if nearest_volunteer:
+            # ✅ STRICT SCOPE CHECK: Verify volunteer is in this event
+            volunteer_in_event = ResponderLocation.objects.filter(
+                user=nearest_volunteer,
+                event_id=event_id,
+                is_active=True
+            ).exists()
+            
+            if not volunteer_in_event:
+                return Response({
+                    "success": False, 
+                    "message": f"Volunteer is not assigned to this event. SOS can only be dispatched to volunteers in the same event.",
+                    "status_code": "volunteer_not_in_event"
+                }, status=400)
+            
+            # ✅ EVENT-LEVEL CONSTRAINT: Check if volunteer is already assigned to another ACTIVE event
+            conflict_info = check_volunteer_active_event_conflict(nearest_volunteer, event_id)
+            if conflict_info and conflict_info['has_conflict']:
+                return Response({
+                    "success": False, 
+                    "message": f"Volunteer {nearest_volunteer.full_name} is already assigned to {conflict_info['conflicting_event_name']} event. They can only handle one active event at a time.",
+                    "status_code": "volunteer_busy"
+                }, status=409)
+            
             sos.assigned_volunteer = nearest_volunteer
             sos.status = 'assigned'
             sos.save()
@@ -415,60 +756,114 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
         }, status=404)
 
     def perform_create(self, serializer):
-        user = self.request.user
-        lat = self.request.data.get('latitude')
-        lon = self.request.data.get('longitude')
-        event_id = self.request.data.get('event')
+        try:
+            user = self.request.user
+            lat = self.request.data.get('latitude')
+            lon = self.request.data.get('longitude')
+            event_id = self.request.data.get('event')
+            
+            # ⚠️ BACKPRESSURE GUARD: Prevent system overload under stress
+            # If too many active SOS exist, reject new ones gracefully
+            # NOTE: Frontend handles the 30-second rate limiting with countdown timer
+            # Backend only guards against system overload
+            from django.conf import settings
+            max_active_sos = getattr(settings, 'MAX_ACTIVE_SOS', 500)
+            active_sos_count = SOSAlert.objects.filter(status__in=['reported', 'assigned']).count()
+            
+            if active_sos_count >= max_active_sos:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(f"System under heavy load ({active_sos_count} active SOS). Please try again in a moment.")
+            
+            location_name = self.request.data.get('location_name')
+            
+            # Save SOS without auto-assignment (will be assigned when volunteer accepts)
+            sos = serializer.save(user=user, location_name=location_name)
+            
+            # 🎯 STEP 5.3: Find nearby volunteers (don't auto-assign yet)
+            nearby_volunteers = []
+            if lat and lon and event_id:
+                try:
+                    nearby_volunteers = find_nearby_volunteers(
+                        float(lat), float(lon), int(event_id), radius_km=2
+                    )
+                except Exception as e:
+                    print(f"[WARN] find_nearby_volunteers failed: {e}")
+                    nearby_volunteers = []
+
+            # Log SOS metrics safely
+            try:
+                eligible_responders = ResponderLocation.objects.filter(
+                    event_id=event_id,
+                    is_active=True,
+                    event__start_datetime__lte=timezone.now(),
+                    event__end_datetime__gt=timezone.now()
+                ).count()
+                
+                fallback_triggered = len(nearby_volunteers) == 0 and eligible_responders > 0
+                sos_metrics.log_sos_created(
+                    sos_id=sos.id,
+                    event_id=event_id,
+                    nearby_count=len(nearby_volunteers),
+                    fallback=fallback_triggered
+                )
+            except Exception as e:
+                print(f"[WARN] log_sos_created failed: {e}")
+
+            # Notify staff about the SOS
+            try:
+                from django.contrib.auth import get_user_model
+                UserModel = get_user_model()
+                staff = UserModel.objects.filter(role__in=['organizer', 'admin'])
+                for s in staff:
+                    send_notification(s, f"URGENT: SOS Alert from {user.full_name}", f"Location: {location_name}.", 'sos', sos.event)
+            except Exception as e:
+                print(f"[WARN] Staff notification failed: {e}")
+
+            # Notify nearby volunteers (don't assign, just alert them to accept)
+            if nearby_volunteers:
+                try:
+                    for volunteer, distance in nearby_volunteers:
+                        distance_text = f"{distance:.2f}km away" if distance else "in your area"
+                        send_notification(
+                            volunteer,
+                            "Emergency SOS Alert Nearby!",
+                            f"SOS from {user.full_name} at {location_name} ({distance_text}). Tap to respond.",
+                            'assignment',
+                            sos.event
+                        )
+                except Exception as e:
+                    print(f"[WARN] Volunteer notification failed: {e}")
+
+            # Log action
+            try:
+                log_sos_action(
+                    sos_alert=sos,
+                    action_type='reported',
+                    performed_by=self.request.user,
+                    new_status=sos.status,
+                    notes=f"Emergency SOS signal triggered at {location_name}. Broadcast to {len(nearby_volunteers)} nearby volunteers."
+                )
+            except Exception as e:
+                print(f"[WARN] log_sos_action failed: {e}")
+            
+            # Broadcast to nearby volunteers
+            try:
+                self.broadcast_sos_to_nearby_volunteers(sos, nearby_volunteers)
+            except Exception as e:
+                print(f"[WARN] SOS Targeted Broadcast failed: {e}")
+                
+        except Exception as e:
+            print(f"[ERROR] perform_create failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
         
-        # 0. Privileged Routing: Spam Rate Limiter
-        cache_key = f"rate_limit_sos_{user.id}"
-        from django.core.cache import cache
-        if cache.get(cache_key):
-             from rest_framework.exceptions import Throttled
-             # In production, repeat strikes could trigger an account autoban flag `user.is_active = False`
-             raise Throttled(detail="Please wait 30 seconds before triggering another SOS to prevent network spam.")
-        cache.set(cache_key, True, 30)
-        
-        location_name = self.request.data.get('location_name')
-        if not location_name and lat is not None and lon is not None:
-            location_name = reverse_geocode(lat, lon)
-
-        nearest_volunteer = None
-        if lat and lon and event_id:
-            nearest_volunteer = self.find_nearest_volunteer(float(lat), float(lon), event_id)
-
-        sos = serializer.save(
-            user=user,
-            location_name=location_name,
-            assigned_volunteer=nearest_volunteer
-        )
-
-        from django.contrib.auth import get_user_model
-        UserModel = get_user_model()
-        staff = UserModel.objects.filter(role__in=['organizer', 'admin'])
-        for s in staff:
-            send_notification(s, f"URGENT: SOS Alert from {user.full_name}", f"Location: {location_name}.", 'sos', sos.event)
-
-        if nearest_volunteer:
-            send_notification(
-                nearest_volunteer,
-                "Emergency Assigned to You!",
-                f"SOS from {user.full_name} at {location_name}. Respond immediately.",
-                'assignment',
-                sos.event
-            )
-
-        log_sos_action(
-            sos_alert=sos,
-            action_type='reported',
-            performed_by=self.request.user,
-            new_status=sos.status,
-            notes=f"Emergency SOS signal triggered at {location_name}. Nearest volunteer dispatched."
-        )
+        # Also broadcast to organizers/admins for awareness
         try:
             self.broadcast_sos(sos, 'new_sos')
         except Exception as e:
-            print(f"SOS Broadcast failed: {e}")
+            print(f"SOS Organizer Broadcast failed: {e}")
+
 
     def find_nearest_volunteer(self, lat, lon, event_id):
         import redis
@@ -498,7 +893,7 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             user_id = member.decode('utf-8') if isinstance(member, bytes) else member
             try:
                 volunteer = User.objects.get(id=user_id)
-                active_cases = SOSAlert.objects.filter(assigned_volunteer=volunteer, status__in=['active', 'assigned']).count()
+                active_cases = SOSAlert.objects.filter(assigned_volunteer=volunteer, status__in=['assigned', 'in_progress']).count()
                 score = dist_meters + (active_cases * 50)
                 
                 if score < min_score:
@@ -525,14 +920,30 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
                 notes=f"SOS Status changed to {sos.status}."
             )
             
+            # 🎯 LOG COMPLETION: When SOS is fully resolved, log total response time
+            if sos.status == 'resolved':
+                completion_seconds = (timezone.now() - sos.created_at).total_seconds()
+                sos_metrics.log_sos_completed(
+                    sos_id=sos.id,
+                    completion_seconds=completion_seconds
+                )
+            
         self.broadcast_sos(sos, 'update_sos')
 
     def broadcast_sos(self, sos, action):
+        """
+        Broadcast SOS updates to organizers and the attendee (not to volunteers)
+        
+        ✅ STEP 5.3.5: Removed 'role_volunteer' from recipients
+        - Volunteers now ONLY receive SOS alerts via targeted SOS_NEARBY messages
+        - This prevents global broadcast noise to all volunteers
+        - Only nearby volunteers (within 2km) receive alerts
+        """
         channel_layer = get_channel_layer()
         groups = [
-            f"user_{sos.user.id}",
-            "role_organizer",
-            "role_volunteer"
+            f"user_{sos.user.id}",       # Attendee who made SOS
+            "role_organizer",             # Organizers for awareness/management
+            "role_admin"                  # Admins for monitoring
         ]
         
         payload = {
@@ -556,6 +967,62 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
 
         for group in groups:
             async_to_sync(channel_layer.group_send)(group, payload)
+
+    def broadcast_sos_to_nearby_volunteers(self, sos, nearby_volunteers_list):
+        """
+        🎯 STEP 5.3.2 — Targeted WebSocket Broadcast
+        
+        Sends SOS alert ONLY to nearby volunteers (not global broadcast)
+        
+        Args:
+            sos: SOSAlert instance
+            nearby_volunteers_list: List of tuples [(user_object, distance_km), ...]
+                                    from find_nearby_volunteers()
+        
+        Payload sent to each volunteer:
+        {
+            "type": "SOS_NEARBY",
+            "sos_id": int,
+            "event_id": int,
+            "latitude": float,
+            "longitude": float,
+            "distance": float or None,
+            "sos_type": str,
+            "priority": str,
+            "user_name": str,
+            "location_name": str,
+            "message": str
+        }
+        """
+        channel_layer = get_channel_layer()
+        
+        for volunteer, distance_km in nearby_volunteers_list:
+            # Target only this specific volunteer via their user channel
+            user_channel = f"user_{volunteer.id}"
+            
+            # Build distance message
+            distance_str = f"{distance_km:.2f}km away" if distance_km else "in your area"
+            
+            payload = {
+                'type': 'sos_nearby',  # Type for handler in consumer
+                'sos_id': sos.id,
+                'event_id': sos.event_id,
+                'latitude': float(sos.latitude),
+                'longitude': float(sos.longitude),
+                'distance': distance_km,
+                'distance_text': distance_str,
+                'sos_type': sos.sos_type,
+                'sos_type_display': sos.get_sos_type_display(),
+                'priority': sos.priority,
+                'user_name': sos.user.full_name,
+                'user_phone': getattr(sos.user, 'phone_number', 'N/A'),
+                'location_name': sos.location_name,
+                'status': sos.status,
+                'message': f"Emergency SOS from {sos.user.full_name} at {sos.location_name} ({distance_str})"
+            }
+            
+            # Send to only this volunteer
+            async_to_sync(channel_layer.group_send)(user_channel, payload)
 
 
 class SafetyAlertViewSet(viewsets.ModelViewSet):
@@ -593,6 +1060,21 @@ class ResponderLocationViewSet(viewsets.ModelViewSet):
     serializer_class = ResponderLocationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        """Filter responders based on user role"""
+        qs = super().get_queryset()
+        user = self.request.user
+        
+        # Organizers see responders only from their events
+        if user.role == 'organizer':
+            qs = qs.filter(event__organizer=user)
+        # Volunteers see only their own location
+        elif user.role == 'volunteer':
+            qs = qs.filter(user=user)
+        # Admins see all
+        
+        return qs
+
     def perform_create(self, serializer):
         # UPSERT logic: check if exists for this user
         existing = ResponderLocation.objects.filter(user=self.request.user).first()
@@ -606,6 +1088,113 @@ class ResponderLocationViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         responder = serializer.save()
         self.broadcast_location(responder)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def assign(self, request):
+        """
+        ✅ ORGANIZER ASSIGNMENT ENDPOINT
+        POST /monitoring/responders/assign/
+        
+        Organizer assigns volunteer to an event by creating/updating ResponderLocation
+        
+        Body: {
+            "volunteer_id": 5,
+            "event_id": 3,
+            "status": "available"  (optional, defaults to 'available')
+        }
+        """
+        # Only organizers and admins can assign
+        if request.user.role not in ['organizer', 'admin']:
+            return Response({
+                "error": "Only organizers and admins can assign volunteers."
+            }, status=403)
+        
+        volunteer_id = request.data.get('volunteer_id')
+        event_id = request.data.get('event_id')
+        status = request.data.get('status', 'available')
+        
+        if not volunteer_id or not event_id:
+            return Response({
+                "error": "volunteer_id and event_id are required"
+            }, status=400)
+        
+        try:
+            volunteer = User.objects.get(id=volunteer_id, role='volunteer')
+            event = Event.objects.get(id=event_id)
+        except (User.DoesNotExist, Event.DoesNotExist):
+            return Response({
+                "error": "Volunteer or event not found"
+            }, status=404)
+        
+        # Organizer can only assign to their own events
+        if request.user.role == 'organizer' and event.organizer != request.user:
+            return Response({
+                "error": "You can only assign volunteers to your own events"
+            }, status=403)
+        
+        # UPSERT: Create or update ResponderLocation
+        responder, created = ResponderLocation.objects.update_or_create(
+            user=volunteer,
+            event=event,
+            defaults={
+                'status': status,
+                'is_active': True,
+                'latitude': 0.0,  # Volunteer will update their location
+                'longitude': 0.0
+            }
+        )
+        
+        serializer = self.get_serializer(responder)
+        return Response(serializer.data, status=201 if created else 200)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def unassign(self, request):
+        """
+        ✅ ORGANIZER UNASSIGNMENT ENDPOINT
+        POST /monitoring/responders/unassign/
+        
+        Organizer removes volunteer from an event
+        
+        Body: {
+            "volunteer_id": 5,
+            "event_id": 3
+        }
+        """
+        # Only organizers and admins can unassign
+        if request.user.role not in ['organizer', 'admin']:
+            return Response({
+                "error": "Only organizers and admins can unassign volunteers."
+            }, status=403)
+        
+        volunteer_id = request.data.get('volunteer_id')
+        event_id = request.data.get('event_id')
+        
+        if not volunteer_id or not event_id:
+            return Response({
+                "error": "volunteer_id and event_id are required"
+            }, status=400)
+        
+        try:
+            responder = ResponderLocation.objects.get(
+                user_id=volunteer_id,
+                event_id=event_id
+            )
+            
+            # Organizer can only unassign from their own events
+            if request.user.role == 'organizer' and responder.event.organizer != request.user:
+                return Response({
+                    "error": "You can only manage volunteers from your own events"
+                }, status=403)
+            
+            responder.delete()
+            return Response({
+                "success": True,
+                "message": "Volunteer unassigned from event"
+            }, status=200)
+        except ResponderLocation.DoesNotExist:
+            return Response({
+                "error": "Volunteer not assigned to this event"
+            }, status=404)
 
     def broadcast_location(self, responder):
         channel_layer = get_channel_layer()
@@ -726,7 +1315,17 @@ class DashboardStatsView(views.APIView):
             
         active_incidents = Incident.objects.filter(event_id=event_id, status__in=['pending', 'verified']).count()
         
-        active_volunteers = ResponderLocation.objects.filter(event_id=event_id, is_active=True).count()
+        # GAP 1 FIX: Only count volunteers in active events
+        # GAP 2 FIX: Only count volunteers with recent location data (within 5 min)
+        now = timezone.now()
+        five_minutes_ago = now - timedelta(minutes=5)
+        active_volunteers = ResponderLocation.objects.filter(
+            event_id=event_id, 
+            is_active=True,
+            event__start_datetime__lte=now,
+            event__end_datetime__gt=now,
+            last_updated__gte=five_minutes_ago
+        ).count()
         
         active_sos = SOSAlert.objects.filter(event_id=event_id, status='active').count()
 

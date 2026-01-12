@@ -1,5 +1,5 @@
 """
-Strict Location Format Enforcement for OWL Eye Platform
+Strict Location Format Enforcement for OwlEye Platform
 
 This module enforces a structured, machine-readable location format across
 the entire system. All location data must conform to the standard schema:

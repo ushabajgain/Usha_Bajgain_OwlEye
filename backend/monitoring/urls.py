@@ -5,6 +5,7 @@ from .views import (
     IncidentLogViewSet, SOSLogViewSet, CurrentLocationsView, DashboardStatsView, HeatmapView,
     ReverseGeocodeView, CrowdMovementPatternsView, NotificationViewSet
 )
+from .monitoring_views import SOSMetricsView, SystemHealthView
 
 router = DefaultRouter()
 router.register(r'incidents', IncidentViewSet)
@@ -22,5 +23,7 @@ urlpatterns = [
     path('heatmap/<int:event_id>/', HeatmapView.as_view(), name='heatmap-data'),
     path('movement-patterns/<int:event_id>/', CrowdMovementPatternsView.as_view(), name='movement-patterns'),
     path('reverse-geocode/', ReverseGeocodeView.as_view(), name='reverse-geocode'),
+    path('metrics/sos/', SOSMetricsView.as_view(), name='sos-metrics'),
+    path('health/', SystemHealthView.as_view(), name='system-health'),
     path('', include(router.urls)),
 ]

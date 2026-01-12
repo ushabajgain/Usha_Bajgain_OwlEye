@@ -1,4 +1,5 @@
 import requests
+from django.utils import timezone
 from .models import IncidentLog, SOSLog
 from monitoring.locations import LocationSchema, CoordinateValidator, CountryValidator, LocationIDValidator
 
@@ -29,6 +30,7 @@ def reverse_geocode(lat, lon):
     """
     Converts GPS coordinates (lat, lon) into a human-readable location name
     using OpenStreetMap (Nominatim).
+    Returns format: "City-Ward, Country" in English
     """
     if lat is None or lon is None:
         return "Unknown Location"
@@ -39,28 +41,38 @@ def reverse_geocode(lat, lon):
         return GEOCACHE[cache_key]
         
     try:
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1&accept-language=en"
         headers = {
             'User-Agent': 'OwlEyeApp/1.0 (support@owleye.com)'
         }
         response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
         
-        if 'display_name' in data:
-            # Format: 'Tinkune, Kathmandu'
+        if 'address' in data:
             addr = data.get('address', {})
-            neighborhood = addr.get('suburb') or addr.get('neighbourhood') or addr.get('city_district') or addr.get('road')
-            city = addr.get('city') or addr.get('town') or addr.get('village') or addr.get('county')
             
-            # Formatting into 'Neighborhood, City'
-            parts = [neighborhood, city]
-            parts = [p for p in parts if p]
+            # Try to extract English names (Nominatim with accept-language=en)
+            # Look for ward/suburb/neighbourhood first (most specific)
+            ward = addr.get('suburb') or addr.get('neighbourhood') or addr.get('city_district')
             
-            result = "Unknown Location"
-            if parts:
-                result = ", ".join(parts[:2])
+            # Then city/town/village
+            city = addr.get('city') or addr.get('town') or addr.get('village')
+            
+            # Get country
+            country = addr.get('country', 'Nepal')
+            
+            # Format: Use ward if available (it's more specific and already includes city)
+            # Otherwise use city, otherwise use ward
+            if ward:
+                result = f"{ward}, {country}"
+            elif city:
+                result = f"{city}, {country}"
             else:
-                result = ", ".join(data['display_name'].split(',')[0:2]) # Fallback join
+                # Fallback to display_name
+                result = data.get('display_name', 'Unknown Location')
+                # Clean up by taking first part before first comma
+                if ',' in result:
+                    result = result.split(',')[0] + ", " + country
                 
             GEOCACHE[cache_key] = result
             return result

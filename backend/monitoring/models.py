@@ -130,12 +130,12 @@ class SOSAlert(models.Model):
         ('unknown', 'Unknown / Silent'),
     )
     STATUS_CHOICES = (
-        ('active', 'Active Emergency'),
+        ('reported', 'Reported'),
         ('assigned', 'Assigned to Responder'),
-        ('en_route', 'Responder En Route'),
-        ('arrived', 'Responder Arrived'),
+        ('in_progress', 'Help In Progress'),
+        ('completed', 'Completed'),
         ('resolved', 'Resolved'),
-        ('false_alarm', 'False Alarm'),
+        ('cancelled', 'Cancelled'),
     )
     PRIORITY_CHOICES = (
         ('high', 'High'),
@@ -175,12 +175,13 @@ class SOSAlert(models.Model):
         help_text="DEPRECATED: Use location_data.display_name instead"
     )
     sos_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='panic')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='reported')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='critical')
     assigned_volunteer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_sos')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    resolved_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)  # NEW: Track completion time
+    resolved_at = models.DateTimeField(null=True, blank=True)  # Legacy field
 
     class Meta:
         indexes = [

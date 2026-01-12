@@ -40,7 +40,7 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_add(f"user_{user.id}", self.channel_name)
             
             # Scoped Role Groups for targeted broadcasting and security
-            if hasattr(user, 'role'):
+                if hasattr(user, 'role'):
                 await self.channel_layer.group_add(f"role_{user.role}", self.channel_name)
 
         await self.accept()
@@ -81,6 +81,12 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                 battery = data.get('battery', '100%')
                 user_id = user.id if user and user.is_authenticated else data.get('user_id', 0)
 
+                # CRITICAL FIX: Validate user exists in database (prevent ghost users like "Priya Koirala")
+                user_exists = await self.check_user_exists(user_id)
+                if not user_exists:
+                    print(f"Rejected location update from non-existent user {user_id}")
+                    return
+
                 # Event Lifecycle Check: DO NOT process telemetry if event is cancelled or deleted
                 event_info = await self.get_event_cached()
                 if not event_info.get('is_active', True):
@@ -109,8 +115,7 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                     dist_moved = haversine(prev_lat, prev_lng, lat, lng)
                     distance_km = prev.get('distance', 0.0)
                     
-                    # Anti-Jitter Filtering (Ignore >3m but <0.5m drift)
-                    if dist_moved < 0.003: # 3 meters
+                    if dist_moved < 0.003:
                         # Skip processing completely if stationary map noise
                         return
                         
@@ -216,6 +221,14 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
         self._event_cache = await fetch_event(self.event_id)
         return self._event_cache
 
+    @database_sync_to_async
+    def check_user_exists(self, user_id):
+        """CRITICAL: Validate user exists in database to prevent ghost users"""
+        try:
+            return User.objects.filter(id=int(user_id)).exists()
+        except (ValueError, TypeError):
+            return False
+
     async def entity_broadcast(self, event):
         await self.send(text_data=json.dumps(event))
 
@@ -225,6 +238,31 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
             'lat': event['lat'],
             'lng': event['lng'],
             'intensity': event.get('intensity', 1.0)
+        }))
+
+    async def sos_nearby(self, event):
+        """
+        🎯 STEP 5.3.2 — Targeted SOS Nearby Handler
+        
+        Sends SOS alert to specific volunteer (not broadcast to all)
+        Called when volunteer is within proximity radius
+        """
+        await self.send(text_data=json.dumps({
+            'type': 'SOS_NEARBY',
+            'sos_id': event.get('sos_id'),
+            'event_id': event.get('event_id'),
+            'latitude': event.get('latitude'),
+            'longitude': event.get('longitude'),
+            'distance': event.get('distance'),
+            'distance_text': event.get('distance_text'),
+            'sos_type': event.get('sos_type'),
+            'sos_type_display': event.get('sos_type_display'),
+            'priority': event.get('priority'),
+            'user_name': event.get('user_name'),
+            'user_phone': event.get('user_phone'),
+            'location_name': event.get('location_name'),
+            'status': event.get('status'),
+            'message': event.get('message')
         }))
 
     @database_sync_to_async
