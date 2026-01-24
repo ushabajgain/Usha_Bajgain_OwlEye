@@ -118,7 +118,6 @@ const LiveMap = () => {
         updateEventId 
     } = useSafetySocket(targetEventId);
 
-    // Map State
     const mapRef = useRef(null);
     const [mapInstance, setMapInstance] = useState(null);
     const markerClusterGroup = useRef(null);
@@ -127,7 +126,6 @@ const LiveMap = () => {
     const sosMarkers = useRef({});
     const userMarkers = useRef({});
 
-    // 1. Initialize Map
     useEffect(() => {
         if (loading || !mapRef.current || mapInstance) return;
 
@@ -353,7 +351,7 @@ const LiveMap = () => {
         Object.values(incidents).filter(inc => inc.event_id == targetEventId).forEach(inc => {
             if (!incidentMarkers.current[inc.id]) {
                 const flaggedBadge = inc.is_flagged_reporter 
-                    ? `<div style="margin-top:5px; color:#991b1b; background:#fef2f2; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid #fee2e2;">⚠️ SUSPICIOUS REPORTER - VERIFY CAREFULLY</div>` 
+                    ? `<div style="margin-top:5px; color:#991b1b; background:#fef2f2; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid #fee2e2;">SUSPICIOUS REPORTER - VERIFY CAREFULLY</div>` 
                     : '';
                 
                 const lat = inc.latitude || inc.lat;
@@ -389,7 +387,7 @@ const LiveMap = () => {
                 const nearest = findNearestVolunteer(s.lat || s.latitude, s.lng || s.longitude);
                 const nearestHtml = nearest 
                     ? `<div style="margin-top:8px; padding:6px; background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; font-size:11px; color:#92400e;">
-                         <strong style="display:block; margin-bottom:2px;">🛡️ NEAREST RESPONDER</strong>
+                         <strong style="display:block; margin-bottom:2px;">NEAREST RESPONDER</strong>
                          ${nearest.name} (${nearest.phone || 'N/A'})
                        </div>`
                     : `<div style="margin-top:8px; padding:6px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:11px; color:#64748b;">
@@ -488,16 +486,36 @@ const LiveMap = () => {
                     <div style={{ width: 360, background: '#f8fafc', borderRight: `1px solid ${BORDER}`, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         
                         {/* Stats Panel */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 4 }}>
-                            <div style={{ background: '#fff', padding: '12px', borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-                                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Attendees</p>
-                                <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: ACCENT }}>{Object.values(users).filter(u => u.role === 'attendee').length}</p>
-                            </div>
-                            <div style={{ background: '#fff', padding: '12px', borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-                                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Volunteers</p>
-                                <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{Object.values(users).filter(u => u.role === 'volunteer').length}</p>
-                            </div>
-                        </div>
+                        {(() => {
+                            // CRITICAL FIX: Validate users before rendering
+                            const validUsers = Object.values(users).filter(u => {
+                                const isValid = u && u.user_id && u.name && (u.lat || u.latitude) && (u.lng || u.longitude);
+                                if (!isValid && u) {
+                                    console.error(`[LIVEMAP_VALIDATION] Invalid user detected:`, { 
+                                        name: u.name, 
+                                        user_id: u.user_id,
+                                        coords: `${u.lat || u.latitude}, ${u.lng || u.longitude}`
+                                    });
+                                }
+                                return isValid;
+                            });
+                            const attendeeCount = validUsers.filter(u => u.role === 'attendee').length;
+                            const volunteerCount = validUsers.filter(u => u.role === 'volunteer').length;
+                            console.log(`[LIVEMAP_STATS] Total valid users: ${validUsers.length} (${attendeeCount} attendees, ${volunteerCount} volunteers)`);
+                            
+                            return (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 4 }}>
+                                    <div style={{ background: '#fff', padding: '12px', borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
+                                        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Attendees</p>
+                                        <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: ACCENT }}>{attendeeCount}</p>
+                                    </div>
+                                    <div style={{ background: '#fff', padding: '12px', borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
+                                        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Volunteers</p>
+                                        <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{volunteerCount}</p>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         
                         <div style={{ position: 'relative' }}>
@@ -512,6 +530,16 @@ const LiveMap = () => {
 
                         {Object.values(users)
                             .filter(u => {
+                                // CRITICAL FIX: Filter out invalid users before rendering
+                                const isValid = u && u.user_id && u.name && (u.lat || u.latitude) && (u.lng || u.longitude);
+                                if (!isValid) {
+                                    if (u) {
+                                        console.error(`[LIVEMAP_FILTER] Skipping invalid user:`, u);
+                                    }
+                                    return false;
+                                }
+                                
+                                // Apply search filter
                                 const q = (mapSearch || "").trim().toLowerCase();
                                 return (u.name || "").toLowerCase().includes(q) || 
                                        (u.role || "").toLowerCase().includes(q);

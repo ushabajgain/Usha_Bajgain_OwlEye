@@ -1,5 +1,5 @@
 """
-Location-aware model fields and mixins for OWL Eye.
+Location-aware model fields and mixins for OwlEye.
 
 Provides structured location storage and validation for tracking-related models.
 """

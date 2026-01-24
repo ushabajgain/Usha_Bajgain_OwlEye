@@ -1,5 +1,5 @@
 """
-Location management API views for OWL Eye.
+Location management API views for OwlEye.
 
 Provides endpoints for:
 - User location updates
