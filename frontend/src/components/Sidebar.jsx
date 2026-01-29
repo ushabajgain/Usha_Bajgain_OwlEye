@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Ticket, FileText,
     Calendar, Map, ShieldAlert, QrCode,
     Activity, History, AlertTriangle, LogOut,
-    Zap, Ambulance, Siren, Building, Settings, Users,
+    Eye, Ambulance, Siren, Building, Settings, Users,
     Globe, TrendingUp, Bell, Shield
 } from 'lucide-react';
 import api from '../utils/api';
@@ -151,7 +151,7 @@ const Sidebar = () => {
         <>
             <aside style={s.aside}>
                 <Link to="/" style={s.logo}>
-                    <div style={s.logoIcon}><Zap size={20} /></div>
+                    <div style={s.logoIcon}><Eye size={20} /></div>
                     <div>
                         <div style={s.logoText}>OwlEye</div>
                         <div style={s.logoSub}>Event Management</div>

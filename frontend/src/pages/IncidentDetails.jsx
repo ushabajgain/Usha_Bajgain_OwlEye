@@ -32,13 +32,17 @@ const IncidentDetails = () => {
 
     const fetchDetails = async () => {
         try {
-            const [incRes, logRes, volRes] = await Promise.all([
+            // Step 1: Fetch incident and logs first
+            const [incRes, logRes] = await Promise.all([
                 api.get(`/monitoring/incidents/${id}/`),
-                api.get(`/monitoring/incident-logs/?incident=${id}`),
-                api.get(`/accounts/volunteers/`)
+                api.get(`/monitoring/incident-logs/?incident=${id}`)
             ]);
+            
             setIncident(incRes.data);
             setLogs(logRes.data);
+            
+            // Step 2: Fetch event-specific volunteers using incident's event_id
+            const volRes = await api.get(`/events/${incRes.data.event_id}/volunteers/`);
             setVolunteers(volRes.data);
         } catch (err) {
             console.error('Failed to fetch details', err);
@@ -145,7 +149,7 @@ const IncidentDetails = () => {
                                     <div style={s.metaItem}>
                                         <span style={s.metaLabel}>Reputation</span>
                                         <span style={{...s.metaValue, color: incident.is_flagged_reporter ? '#ef4444' : '#16a34a', fontWeight: 700 }}>
-                                            {incident.is_flagged_reporter ? '⚠️ FLAGGED' : '✅ TRUSTED'} ({incident.reporter_false_count} False)
+                                            {incident.is_flagged_reporter ? 'FLAGGED' : 'TRUSTED'} ({incident.reporter_false_count} False)
                                         </span>
                                     </div>
                                     <div style={s.metaItem}>

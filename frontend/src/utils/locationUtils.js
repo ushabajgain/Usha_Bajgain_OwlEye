@@ -1,5 +1,5 @@
 /**
- * Location System Utilities for OWL Eye Frontend
+ * Location System Utilities for OwlEye Frontend
  * 
  * CRITICAL ARCHITECTURE RULE:
  * Frontend does NOT validate, enrich, or transform location data.
@@ -72,6 +72,12 @@ export const formatLocation = (locationData) => {
   // Fallback to coordinates
   return formatCoordinates(locationData.lat, locationData.lng);
 };
+
+/**
+ * Validator for country codes
+ */
+export class CountryValidator {
+  /**
    * @param {string} countryCode - Two-letter code
    * @returns {string} Validated country code (uppercase)
    * @throws {Error} If code is invalid

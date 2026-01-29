@@ -65,7 +65,7 @@ export function LocationDisplay() {
     return (
         <div style={{ padding: '20px', border: '1px solid #ccc' }}>
             <h3>Location Tracking</h3>
-            <p>Status: {isTracking ? '🟢 Active' : '🔴 Inactive'}</p>
+            <p>Status: {isTracking ? 'Active' : 'Inactive'}</p>
             
             {lastLocation && (
                 <div>
@@ -182,7 +182,7 @@ export function LocationTrackingDashboard() {
             borderRadius: '8px',
             maxWidth: '300px'
         }}>
-            <h3>📍 Location Tracking</h3>
+            <h3>Location Tracking</h3>
             
             <div style={{ marginBottom: '15px' }}>
                 <strong>Status:</strong>
@@ -193,7 +193,7 @@ export function LocationTrackingDashboard() {
                     borderRadius: '4px',
                     fontSize: '12px'
                 }}>
-                    {isTracking ? '🟢 Tracking Active' : '🔴 Tracking Inactive'}
+                    {isTracking ? 'Tracking Active' : 'Tracking Inactive'}
                 </div>
             </div>
 
@@ -257,10 +257,10 @@ export function EventAttendeeView() {
                 <strong>Live Tracking Status:</strong>
                 <ul style={{ margin: '10px 0' }}>
                     <li>
-                        WebSocket: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+                        WebSocket: {isConnected ? 'Connected' : 'Disconnected'}
                     </li>
                     <li>
-                        GPS Tracking: {isTracking ? '🟢 Active' : '🔴 Inactive'}
+                        GPS Tracking: {isTracking ? 'Active' : 'Inactive'}
                     </li>
                     <li>
                         Location Permission: {lastLocation ? '✓ Granted' : '⏳ Pending'}

@@ -118,18 +118,13 @@ const Invoices = () => {
             pdf.text(selectedInv.email, L + 20, y + 62);
 
 
-            // ═══════════════════════════════════════
-            // ITEMS TABLE  (y = 280+)
-            // ═══════════════════════════════════════
             y = 280;
 
-            // Column positions (well-spaced)
             const c1 = L + 16;
             const c2 = L + CW * 0.52;
             const c3 = L + CW * 0.72;
             const c4 = R - 16;
 
-            // Table header
             pdf.setFillColor(248, 250, 252);
             pdf.roundedRect(L, y, CW, 32, 6, 6, 'F');
 
@@ -164,19 +159,16 @@ const Invoices = () => {
             // Table rows (generous 55pt per row)
             y += 10;
             Object.values(groups).forEach(g => {
-                // Event name
                 pdf.setTextColor(17, 24, 39);
                 pdf.setFontSize(11);
                 pdf.setFont('helvetica', 'bold');
                 pdf.text(selectedInv.event_name, c1, y + 20);
 
-                // Package name
                 pdf.setTextColor(79, 70, 229);
                 pdf.setFontSize(9);
                 pdf.setFont('helvetica', 'normal');
                 pdf.text(g.name, c1, y + 36);
 
-                // Qty
                 pdf.setTextColor(17, 24, 39);
                 pdf.setFontSize(10);
                 pdf.text(String(g.count), c2, y + 26, { align: 'center' });
@@ -197,13 +189,9 @@ const Invoices = () => {
             });
 
 
-            // ═══════════════════════════════════════
-            // TOTALS  (40pt gap after table)
-            // ═══════════════════════════════════════
             y += 40;
             const tL = R - 220;
 
-            // Subtotal
             pdf.setFont('helvetica', 'normal');
             pdf.setTextColor(107, 114, 128);
             pdf.setFontSize(11);
@@ -212,7 +200,6 @@ const Invoices = () => {
             pdf.setFont('helvetica', 'bold');
             pdf.text(selectedInv.amount, R, y, { align: 'right' });
 
-            // Tax (30pt below)
             y += 30;
             pdf.setFont('helvetica', 'normal');
             pdf.setTextColor(107, 114, 128);
@@ -221,12 +208,10 @@ const Invoices = () => {
             pdf.setFont('helvetica', 'bold');
             pdf.text('Rs. 0', R, y, { align: 'right' });
 
-            // Divider line
             y += 18;
             pdf.setDrawColor(229, 231, 235);
             pdf.line(tL, y, R, y);
 
-            // Total (30pt below divider)
             y += 30;
             pdf.setFontSize(18);
             pdf.setTextColor(17, 24, 39);
@@ -235,9 +220,6 @@ const Invoices = () => {
             pdf.text(selectedInv.amount, R, y, { align: 'right' });
 
 
-            // ═══════════════════════════════════════
-            // FOOTER  (70pt gap)
-            // ═══════════════════════════════════════
             y += 70;
             pdf.setFillColor(238, 242, 255);
             pdf.roundedRect(L, y, CW, 65, 10, 10, 'F');

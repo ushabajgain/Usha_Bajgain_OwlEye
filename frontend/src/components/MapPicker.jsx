@@ -57,23 +57,27 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
                     // Try high accuracy first
                     const pos = await getGeo({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
                     const { latitude: lat, longitude: lng } = pos.coords;
-                    map.setView([lat, lng], 16);
-                    placeMarker(map, lat, lng);
-                    reverseGeocode(lat, lng);
+                    if (map && map._container) {
+                        map.setView([lat, lng], 16);
+                        placeMarker(map, lat, lng);
+                        reverseGeocode(lat, lng);
+                    }
                 } catch (err) {
                     console.warn('Initial high-accuracy detect failed, trying low-accuracy...', err);
                     try {
                         const pos = await getGeo({ enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 });
                         const { latitude: lat, longitude: lng } = pos.coords;
-                        map.setView([lat, lng], 16);
-                        placeMarker(map, lat, lng);
-                        reverseGeocode(lat, lng);
+                        if (map && map._container) {
+                            map.setView([lat, lng], 16);
+                            placeMarker(map, lat, lng);
+                            reverseGeocode(lat, lng);
+                        }
                     } catch (err2) {
                         console.warn('Initial browser detect failed, trying IP...', err2);
                         try {
                             const res = await fetch('https://ipapi.co/json/');
                             const data = await res.json();
-                            if (data.latitude && data.longitude) {
+                            if (data.latitude && data.longitude && map && map._container) {
                                 map.setView([data.latitude, data.longitude], 13);
                                 placeMarker(map, data.latitude, data.longitude);
                                 reverseGeocode(data.latitude, data.longitude);
@@ -187,10 +191,14 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
 
         const applyLocation = (lat, lng, zoom = 16) => {
             const map = mapInstanceRef.current;
-            if (map) {
-                map.setView([lat, lng], zoom);
-                placeMarker(map, lat, lng);
-                reverseGeocode(lat, lng);
+            if (map && map._container) {
+                try {
+                    map.setView([lat, lng], zoom);
+                    placeMarker(map, lat, lng);
+                    reverseGeocode(lat, lng);
+                } catch (err) {
+                    console.error('Error applying location to map:', err);
+                }
             }
             setIsLocating(false);
         };

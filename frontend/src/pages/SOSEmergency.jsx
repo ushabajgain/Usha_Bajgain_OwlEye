@@ -27,22 +27,48 @@ const SOSEmergency = () => {
     useEffect(() => {
         const fetchSOSContext = async () => {
             try {
-                if (eventId) {
-                    const res = await api.get(`/events/${eventId}/`);
-                    setEventName(res.data.name);
+                // MVP: Try URL param first, then localStorage, then fallback to ticket API
+                let detectedEventId = eventId;
+                let detectedEventName = '';
+                
+                // Try localStorage as fallback
+                if (!detectedEventId) {
+                    const stored = localStorage.getItem('current_event_id');
+                    const storedName = localStorage.getItem('current_event_name');
+                    if (stored) {
+                        detectedEventId = stored;
+                        detectedEventName = storedName || '';
+                    }
+                }
+                
+                // If we have an event ID, fetch its details
+                if (detectedEventId) {
+                    setTargetEventId(detectedEventId.toString());
+                    if (!detectedEventName) {
+                        try {
+                            const res = await api.get(`/events/${detectedEventId}/`);
+                            detectedEventName = res.data.name;
+                        } catch (e) {
+                            console.warn("Failed to fetch event details:", e);
+                        }
+                    }
+                    setEventName(detectedEventName);
                 } else {
-                    const [tkRes, evRes] = await Promise.all([
-                        api.get('/tickets/my-tickets/'),
-                        api.get('/events/')
-                    ]);
-                    
-                    if (tkRes.data.length > 0) {
-                        const evt = tkRes.data[0].event_details;
-                        setTargetEventId(evt.id.toString());
-                        setEventName(evt.name);
-                    } else if (evRes.data.length > 0) {
-                        setTargetEventId(evRes.data[0].id.toString());
-                        setEventName(evRes.data[0].name);
+                    // Fallback: Try ticket API
+                    try {
+                        const tkRes = await api.get('/tickets/my-tickets/');
+                        if (tkRes.data && tkRes.data.length > 0) {
+                            const evt = tkRes.data[0].event_details;
+                            detectedEventId = evt.id.toString();
+                            detectedEventName = evt.name;
+                            setTargetEventId(detectedEventId);
+                            setEventName(detectedEventName);
+                            // Store for next time
+                            localStorage.setItem('current_event_id', detectedEventId);
+                            localStorage.setItem('current_event_name', detectedEventName);
+                        }
+                    } catch (e) {
+                        console.warn("Failed to fetch tickets:", e);
                     }
                 }
             } catch (e) {
@@ -96,7 +122,19 @@ const SOSEmergency = () => {
                     priority: 'critical',
                     location_name: resolvedLocationName || null
                 });
+                
+                // ✅ SOS sent successfully - show success message and lock interface for 30 seconds
                 setStatus('sent');
+                setCountdown(30);
+                cancelRef.current = setInterval(() => {
+                    setCountdown(prev => {
+                        if (prev <= 1) {
+                            clearInterval(cancelRef.current);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
             } catch (err) {
                 console.error("SOS Dispatch Error:", err.response?.data || err.message);
                 setError(err.response?.data?.detail || "Connection failed. Help might not be dispatched.");
@@ -220,9 +258,29 @@ const SOSEmergency = () => {
                                 <div style={s.sentBadge}>
                                     <MapPin size={16} /> GPS CONFIRMED
                                 </div>
+                                
+                                {/* ✅ Countdown before allowing another SOS */}
+                                <div style={{ marginTop: 32, padding: 16, background: '#f0fdf4', borderRadius: 12, border: '1px solid #bbf7d0' }}>
+                                    <p style={{ fontSize: 13, color: '#166534', fontWeight: 700, margin: 0 }}>
+                                        Next SOS available in: <span style={{ fontSize: 20, fontWeight: 900 }}>{countdown}s</span>
+                                    </p>
+                                </div>
+                                
                                 <div style={{ marginTop: 40 }}>
-                                    <button onClick={() => setStatus('idle')} style={{ background: 'none', border: 'none', color: TEXT_MID, fontWeight: 700, fontSize: 14, cursor: 'pointer', textDecoration: 'underline' }}>
-                                        Reset Form
+                                    <button 
+                                        onClick={() => setStatus('idle')} 
+                                        disabled={countdown > 0}
+                                        style={{ 
+                                            background: countdown > 0 ? '#e5e7eb' : 'none', 
+                                            border: 'none', 
+                                            color: countdown > 0 ? '#9ca3af' : TEXT_MID, 
+                                            fontWeight: 700, 
+                                            fontSize: 14, 
+                                            cursor: countdown > 0 ? 'not-allowed' : 'pointer', 
+                                            textDecoration: countdown > 0 ? 'none' : 'underline',
+                                            opacity: countdown > 0 ? 0.6 : 1
+                                        }}>
+                                        {countdown > 0 ? 'Waiting to reset...' : 'Reset Form'}
                                     </button>
                                 </div>
                             </div>

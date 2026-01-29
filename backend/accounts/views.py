@@ -192,39 +192,31 @@ class ChangePasswordView(views.APIView):
         if not old_password or not new_password:
             return Response({"error": "Missing old or new password."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. New password cannot be same as old password
         if old_password == new_password:
             return Response({"error": "New password must be different from your current password."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 2. Check if current password is correct
         if not user.check_password(old_password):
             return Response({"error": "Invalid current password."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. Standard Django password validation (length, complexity, etc.)
         try:
             validate_password(new_password, user)
         except ValidationError as e:
             return Response({"error": e.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 4. Update password
         user.set_password(new_password)
         user.save()
 
-        # 5. Dashboard Notification
         try:
             from monitoring.utils import send_notification
             send_notification(user, "Security Alert", "Your password was recently changed. If you did not do this, contact security.", "system")
         except: pass
 
-        # 5. Logout from all devices (Blacklist all refresh tokens)
         try:
             from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
             tokens = OutstandingToken.objects.filter(user=user)
             for token in tokens:
                 BlacklistedToken.objects.get_or_create(token=token)
         except ImportError:
-            # Fallback if blacklist app isn't perfectly configured, 
-            # though it is in our settings.py
             pass
 
         return Response({"message": "Password updated. You've been logged out for security reasons."}, status=status.HTTP_200_OK)
@@ -237,11 +229,10 @@ class VolunteersListView(generics.ListAPIView):
         return User.objects.filter(role='volunteer')
 
 class UserListView(generics.ListAPIView):
-    permission_classes = [permissions.IsAuthenticated] # Should ideally be IsAdminUser
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        # In a real app, restrict this to Admin only
         search = self.request.query_params.get('search', '')
         if search:
             return User.objects.filter(email__icontains=search) | User.objects.filter(full_name__icontains=search)

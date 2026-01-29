@@ -10,8 +10,23 @@ const SafetyAlertListener = () => {
     useEffect(() => {
         if (!getToken()) return;
         
+        // Skip if WebSocket is known to be unsupported (from previous attempt)
+        if (sessionStorage.getItem('wsDisabled') === 'true') return;
+        
         // We use a fixed event ID 1 for now as per current project pattern
         const socket = new WebSocket(`ws://127.0.0.1:8000/ws/heatmap/1/`);
+
+        socket.onerror = (err) => {
+            // Mark WebSocket as disabled for this session
+            sessionStorage.setItem('wsDisabled', 'true');
+        };
+
+        socket.onclose = (e) => {
+            // Mark WebSocket as disabled if connection fails
+            if (e.code === 1006 || !e.wasClean) {
+                sessionStorage.setItem('wsDisabled', 'true');
+            }
+        };
 
         socket.onmessage = (e) => {
             try {

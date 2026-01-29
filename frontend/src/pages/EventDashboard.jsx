@@ -38,8 +38,6 @@ import { getUserId, getRole, getFullName } from '../utils/auth';
 import { useSafety } from '../context/SafetySocketContext';
 
 
-// ── palette (mapped to design-system tokens) ─────────────────────────────
-const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
 const ACCENT = C.primary;
 const ACCENT2 = C.secondary;
@@ -48,7 +46,6 @@ const TEXT_DARK = C.textPrimary;
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
-// ── helpers ────────────────────────────────────────────────────────────────────
 const getPlaceholderImage = (category) => {
     // Generate a placeholder image based on category using a placeholder service
     const categoryMap = {
@@ -85,9 +82,6 @@ const RevenueTooltip = ({ active, payload, label }) => {
     );
 };
 
-// ── main component ─────────────────────────────────────────────────────────────
-import { useSafetySocket } from '../hooks/useSafetySocket';
-
 const EventDashboard = () => {
     const navigate = useNavigate();
     const [events, setEvents] = useState([]);
@@ -97,20 +91,26 @@ const EventDashboard = () => {
     const [bookingSearch, setBookingSearch] = useState('');
     const [targetEventId, setTargetEventId] = useState('1');
     const [timeframe, setTimeframe] = useState('This Year');
+    const [overviewStats, setOverviewStats] = useState({
+        scanned_tickets: 0,
+        total_tickets: 0,
+        unique_attendees: 0,
+        active_volunteers: 0,
+        active_incidents: 0,
+        active_sos: 0,
+        online_responders: 0,
+    });
     
-    // Safety Data from Global Context
     const { incidents, sosAlerts, locations = {}, loading: safetyLoading, tickets, events: eventsContext } = useSafetySocket(targetEventId);
 
-    // Derive safety stats from context data
-    const safetyStats = useMemo(() => {
-        const locationValues = Object.values(locations);
-        const volunteers = locationValues.filter(l => l.role === 'volunteer').length;
-        const activeUsers = locationValues.length;
-        return {
-            active_volunteers: volunteers,
-            active_users: activeUsers
-        };
-    }, [locations]);
+    const fetchOverviewStats = async (eventId) => {
+        try {
+            const res = await api.get(`/monitoring/overview/${eventId}/`);
+            setOverviewStats(res.data);
+        } catch (err) {
+            console.error("Failed to fetch overview stats", err);
+        }
+    };
 
     const fetchAll = async () => {
         setLoading(true);
@@ -126,6 +126,11 @@ const EventDashboard = () => {
                 const firstEventId = evRes.data[0].id.toString();
                 if (targetEventId !== firstEventId) {
                     setTargetEventId(firstEventId);
+                    // Fetch stats for new event
+                    fetchOverviewStats(firstEventId);
+                } else {
+                    // Fetch stats for current event
+                    fetchOverviewStats(firstEventId);
                 }
             }
         } catch (err) {
@@ -142,7 +147,39 @@ const EventDashboard = () => {
             return;
         }
         fetchAll();
+
+        // Poll for changes every 30 seconds
+        const pollInterval = setInterval(() => {
+            fetchAll();
+        }, 30000);
+
+        // Listen for cross-tab deletions
+        const handleStorageChange = () => {
+            fetchAll();
+        };
+        window.addEventListener('storage', handleStorageChange);
+
+        // Listen for visibility changes (when user returns to tab)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchAll();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(pollInterval);
+            window.removeEventListener('storage', handleStorageChange);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [navigate]);
+
+    // Re-fetch stats when targetEventId changes
+    useEffect(() => {
+        if (targetEventId) {
+            fetchOverviewStats(targetEventId);
+        }
+    }, [targetEventId]);
 
 
 
@@ -313,56 +350,42 @@ const EventDashboard = () => {
                     </div>
                 )}
 
-                {/* Empty State */}
-                {!loading && events.length === 0 && (
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 32px' }}>
-                        <div style={{ textAlign: 'center', maxWidth: 400 }}>
-                            <div style={{ width: 80, height: 80, background: CARD_BG, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', border: `2px solid ${BORDER}` }}>
-                                <CalendarDays size={40} color={TEXT_MID} />
-                            </div>
-                            <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT_DARK, margin: '0 0 8px 0' }}>No Events Yet</h2>
-                            <p style={{ fontSize: 14, color: TEXT_MID, margin: '0 0 20px 0' }}>Create your first event to get started and manage attendees, bookings, and safety.</p>
-                            <Link to="/organizer/create-event" style={{ display: 'inline-block', padding: '10px 24px', background: ACCENT, color: '#fff', borderRadius: 8, textDecoration: 'none', fontWeight: 700, fontSize: 14 }}>Create Event</Link>
-                        </div>
-                    </div>
-                )}
-
                 {/* Main Content - Analytics Dashboard */}
-                {!loading && events.length > 0 && (
+                {!loading && (
                     <div style={{ padding: '24px 32px', flex: 1, overflowY: 'auto' }}>
                         
                         {/* ── TOP 3 STAT CARDS ──────────────────────────────────────────────────── */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20, marginBottom: 32 }}>
-                            {/* Upcoming Events */}
-                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
-                                <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <CalendarDays size={24} color={ACCENT} />
-                                </div>
-                                <div>
-                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Upcoming Events</p>
-                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{upcomingEvents}</p>
-                                </div>
-                            </div>
-
-                            {/* Total Bookings */}
+                            {/* Total Attendees (from API - unique_attendees) */}
                             <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
                                 <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT2 + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <BookOpen size={24} color={ACCENT2} />
+                                    <Users size={24} color={ACCENT2} />
                                 </div>
                                 <div>
-                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Total Bookings</p>
-                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{totalBookings}</p>
+                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Total Attendees</p>
+                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.unique_attendees}</p>
                                 </div>
                             </div>
 
-                            {/* Tickets Sold */}
+                            {/* Tickets Scanned (from API - scanned_tickets) */}
                             <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
                                 <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT3 + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     <TicketIcon size={24} color={ACCENT3} />
                                 </div>
                                 <div>
-                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Tickets Sold</p>
-                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{ticketsSold}</p>
+                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Tickets Scanned</p>
+                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.scanned_tickets}</p>
+                                </div>
+                            </div>
+
+                            {/* Active Volunteers (from API - active_volunteers) */}
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
+                                <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Shield size={24} color={ACCENT} />
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Active Volunteers</p>
+                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.active_volunteers}</p>
                                 </div>
                             </div>
                         </div>
@@ -387,7 +410,7 @@ const EventDashboard = () => {
 
                                 {/* Donut */}
                                 <div style={{ position: 'relative', height: 180 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={150} minHeight={150}>
                                         <PieChart>
                                             <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
                                                 dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
@@ -452,7 +475,7 @@ const EventDashboard = () => {
                                         <option>This Year</option>
                                     </select>
                                 </div>
-                                <ResponsiveContainer width="100%" height={220}>
+                                <ResponsiveContainer width="100%" height={220} minWidth={300}>
                                     <BarChart data={REVENUE_DATA} margin={{ top: 10, right: 10, left: 35, bottom: 0 }} barGap={2}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="month" tick={{ fontSize: 11, fill: TEXT_MID }} axisLine={false} tickLine={false} />

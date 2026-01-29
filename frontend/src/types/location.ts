@@ -1,5 +1,5 @@
 /**
- * TypeScript type definitions for OWL Eye Location System
+ * TypeScript type definitions for OwlEye Location System
  * 
  * Usage:
  * import type { Location, LocationID, CountryCode } from './types/location';

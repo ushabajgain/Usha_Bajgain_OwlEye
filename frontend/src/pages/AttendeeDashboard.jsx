@@ -39,6 +39,24 @@ const AttendeeDashboard = () => {
             return;
         }
         fetchData();
+
+        // Poll for changes every 30 seconds
+        const pollInterval = setInterval(() => {
+            fetchData();
+        }, 30000);
+
+        // Listen for visibility changes (when user returns to tab)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchData();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(pollInterval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [navigate]);
 
     const fetchData = async () => {

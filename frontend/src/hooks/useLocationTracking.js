@@ -3,7 +3,7 @@ import { useSafety } from '../context/SafetySocketContext';
 import { getUserId } from '../utils/auth';
 
 /**
- * Real-time location tracking hook for OWL Eye.
+ * Real-time location tracking hook for OwlEye.
  * 
  * Continuously tracks user GPS position using navigator.geolocation.watchPosition
  * and sends raw location updates via WebSocket every 5-15 seconds.

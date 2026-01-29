@@ -48,7 +48,7 @@ export const LocationTrackingStatus = () => {
             fontSize: '12px',
             color: isTracking ? '#155724' : '#721c24',
         }}>
-            {isTracking ? '📍 Location tracking active' : '❌ Location tracking inactive'}
+            {isTracking ? 'Location tracking active' : 'Location tracking inactive'}
             {lastLocation && (
                 <div style={{ marginTop: '4px', fontSize: '10px', opacity: 0.8 }}>
                     Last: {lastLocation.latitude.toFixed(4)}, {lastLocation.longitude.toFixed(4)}

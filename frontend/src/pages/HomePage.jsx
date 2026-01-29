@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Shield, Map, Bell, Users, Zap, 
+    Eye, Map, Bell, Users, Zap, 
     ArrowRight, CheckCircle, Globe, 
     Smartphone, Lock, Activity,
-    Eye, Heart, BarChart3, Radio
+    Heart, BarChart3, Radio
 } from 'lucide-react';
 import { getRole, isAuthenticated } from '../utils/auth';
 
@@ -214,8 +214,8 @@ const HomePage = () => {
 
             <nav style={s.nav}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 14, background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 0 30px rgba(99, 102, 241, 0.5)' }}>
-                        <Shield color="#fff" size={24} />
+                    <div style={{ width: 44, height: 44, borderRadius: 14, background: '#4F46E5', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 0 30px rgba(79, 70, 229, 0.5)' }}>
+                        <Eye color="#fff" size={24} />
                     </div>
                     <span style={{ fontSize: 26, fontWeight: 900, letterSpacing: -1.5 }}>OwlEye</span>
                 </div>
@@ -323,7 +323,7 @@ const HomePage = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 80 }}>
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                            <Shield color="#6366f1" size={32} />
+                            <Eye color="#4F46E5" size={32} />
                             <span style={{ fontSize: 28, fontWeight: 900 }}>OwlEye</span>
                         </div>
                         <p style={{ color: '#475569', fontSize: 16, maxWidth: 350 }}>Redefining event safety architecture through intelligence and empathy.</p>

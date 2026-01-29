@@ -44,19 +44,17 @@ const VolunteerDashboard = () => {
     const [nearbySOS, setNearbySOS] = useState([]);
     const [status, setStatus] = useState('Available');
     const [loading, setLoading] = useState(true);
-    const { incidents, sosAlerts, locations = {}, loading: contextLoading } = useSafety();
+    const [acceptingSOSId, setAcceptingSOSId] = useState(null); // ✅ Track which SOS is accepting
+    const [sosError, setSosError] = useState(null); // ✅ Track SOS errors
+    const { incidents, nearbySosAlerts, locations = {}, loading: contextLoading } = useSafety();
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [incRes, sosRes] = await Promise.all([
-                    api.get('/monitoring/incidents/'),
-                    api.get('/monitoring/sos/')
-                ]);
+                const incRes = await api.get('/monitoring/incidents/');
                 // In a real app, we'd filter by 'assigned_volunteer == me'
                 setAssignedTasks(incRes.data.filter(i => i.status === 'verified').slice(0, 2));
-                setNearbySOS(sosRes.data.filter(s => s.status === 'reported').slice(0, 2));
             } catch (err) {
                 console.error("Dashboard fetch error", err);
             } finally {
@@ -66,8 +64,57 @@ const VolunteerDashboard = () => {
         fetchData();
     }, []);
 
+    // ✅ STEP 5.3.4: Sync nearby SOS alerts from WebSocket context
+    useEffect(() => {
+        if (nearbySosAlerts) {
+            setNearbySOS(Object.values(nearbySosAlerts).slice(0, 5));
+        }
+    }, [nearbySosAlerts]);
+
     const activeIncidents = React.useMemo(() => Object.values(incidents), [incidents]);
-    const activeSOS = React.useMemo(() => Object.values(sosAlerts), [sosAlerts]);
+
+    // ✅ STEP 5.3.4: Handle SOS acceptance
+    const handleAcceptSOS = async (sosId) => {
+        setAcceptingSOSId(sosId);
+        setSosError(null);
+        try {
+            const res = await api.post(`/monitoring/sos/${sosId}/accept/`);
+            if (res.status === 200 || res.status === 201) {
+                // Remove from nearby SOS list
+                setNearbySOS(prev => prev.filter(s => s.id !== sosId));
+                console.log(`[SOS_ACCEPT] ✓ Successfully accepted SOS ${sosId}`);
+            }
+        } catch (err) {
+            const status = err.response?.status;
+            const errorData = err.response?.data || {};
+            
+            if (status === 409) {
+                // Another volunteer accepted first - remove from list
+                // ⚠️ PRODUCTION: Backend could return assigned_volunteer_name for better UX
+                const assignedBy = errorData.assigned_volunteer_name || "another volunteer";
+                const errorMsg = `Already accepted by ${assignedBy}`;
+                console.log(`[SOS_ACCEPT] ✗ SOS ${sosId} already taken`);
+                setSosError(errorMsg);
+                setTimeout(() => {
+                    setNearbySOS(prev => prev.filter(s => s.id !== sosId));
+                    setSosError(null);
+                }, 2000);
+            } else if (status === 403) {
+                setSosError(errorData.error || "You cannot accept this SOS.");
+            } else {
+                setSosError(errorData.error || "Failed to accept SOS. Please try again.");
+                console.error(`[SOS_ACCEPT] Error:`, err);
+            }
+        } finally {
+            setAcceptingSOSId(null);
+        }
+    };
+
+    const handleIgnoreSOS = (sosId) => {
+        // ✅ STEP 5.3.4: Allow volunteers to dismiss SOS
+        setNearbySOS(prev => prev.filter(s => s.id !== sosId));
+        console.log(`[SOS_IGNORE] Volunteer dismissed SOS ${sosId}`);
+    };
 
     const s = {
         container: { display: 'flex', minHeight: '100vh', background: CONTENT_BG },
@@ -171,20 +218,68 @@ const VolunteerDashboard = () => {
                         {/* SOS Alert Panel */}
                         <div style={s.card}>
                             <h3 style={s.sectionTitle}><Siren size={18} color="#ef4444" /> Urgent SOS Nearby</h3>
-                            {activeSOS.length > 0 ? activeSOS.map(sos => (
+                            {sosError && (
+                                <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#991b1b', padding: '12px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
+                                    {sosError}
+                                </div>
+                            )}
+                            {nearbySOS.length > 0 ? nearbySOS.map(sos => (
                                 <div key={sos.id} style={s.sosCard}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                                         <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                                             <Bell size={16} />
                                         </div>
-                                        <div>
+                                        <div style={{ flex: 1 }}>
                                             <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: '#991b1b' }}>{sos.user_name}</p>
-                                            <p style={{ margin: 0, fontSize: 11, color: '#dc2626' }}>{sos.sos_type_display} · {new Date(sos.created_at).toLocaleTimeString()}</p>
+                                            <p style={{ margin: 0, fontSize: 11, color: '#dc2626' }}>
+                                                {sos.sos_type_display} · {sos.distance_text || 'nearby'}
+                                            </p>
                                         </div>
                                     </div>
-                                    <button onClick={() => navigate('/volunteer/sos')} style={{ width: '100%', padding: '10px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                                        Accept Response Task
-                                    </button>
+                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '8px 0 12px', lineHeight: 1.4 }}>
+                                        {sos.location_name || 'Unknown location'}
+                                    </p>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button 
+                                            onClick={() => handleAcceptSOS(sos.id)}
+                                            disabled={acceptingSOSId === sos.id}
+                                            style={{ 
+                                                flex: 1, 
+                                                padding: '10px', 
+                                                borderRadius: 8, 
+                                                background: acceptingSOSId === sos.id ? '#dc2626' : '#ef4444', 
+                                                color: '#fff', 
+                                                border: 'none', 
+                                                fontWeight: 700, 
+                                                fontSize: 12, 
+                                                cursor: acceptingSOSId === sos.id ? 'wait' : 'pointer',
+                                                opacity: acceptingSOSId === sos.id ? 0.8 : 1,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: 6
+                                            }}>
+                                            {acceptingSOSId === sos.id && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                                            {acceptingSOSId === sos.id ? 'Accepting...' : 'Accept'}
+                                        </button>
+                                        <button 
+                                            onClick={() => handleIgnoreSOS(sos.id)}
+                                            disabled={acceptingSOSId === sos.id}
+                                            style={{ 
+                                                flex: 1, 
+                                                padding: '10px', 
+                                                borderRadius: 8, 
+                                                background: '#fff', 
+                                                color: '#991b1b', 
+                                                border: '1px solid #fca5a5', 
+                                                fontWeight: 700, 
+                                                fontSize: 12, 
+                                                cursor: acceptingSOSId === sos.id ? 'not-allowed' : 'pointer',
+                                                opacity: acceptingSOSId === sos.id ? 0.5 : 1
+                                            }}>
+                                            Ignore
+                                        </button>
+                                    </div>
                                 </div>
                             )) : <p style={{ textAlign: 'center', color: TEXT_MID, fontSize: 13, padding: 20 }}>No active SOS signals nearby.</p>}
                         </div>
