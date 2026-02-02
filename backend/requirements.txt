@@ -1,15 +1,43 @@
+# Core Django
 Django==4.2.16
 djangorestframework==3.17.1
-djangorestframework_simplejwt==5.5.1
+djangorestframework-simplejwt==5.5.1
+
+# CORS & Security
 django-cors-headers==4.9.0
 django-axes==8.3.1
+
+# Filtering & Pagination
 django-filter==24.3
+
+# Real-time (WebSockets)
 channels==4.3.2
-channels_redis==4.3.0
+channels-redis==4.3.0
 daphne==4.2.1
-pillow==12.2.0
-redis==7.4.0
-stripe==15.0.1
-python-dotenv==1.2.2
+
+# Database
 PyMySQL==1.1.2
+SQLAlchemy==2.0.23
+
+# Caching & Queue
+redis==7.4.0
+celery==5.3.6
+
+# Image Processing
+pillow==12.2.0
+
+# Payment Processing
+stripe==15.0.1
+
+# Utilities
+python-dotenv==1.2.2
 requests==2.33.1
+cryptography==41.0.7
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.6.0
+
+# Development & Debugging
+django-extensions==3.2.3
+django-debug-toolbar==4.3.0

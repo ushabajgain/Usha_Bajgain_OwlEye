@@ -164,7 +164,6 @@ def check_volunteer_active_event_conflict(volunteer, excluding_event_id):
         end_datetime__gt=now
     ).exclude(id=excluding_event_id)
     
-    # Check incidents in those active events
     conflicting_incident = Incident.objects.filter(
         assigned_volunteer=volunteer,
         event__in=active_events,
@@ -179,7 +178,6 @@ def check_volunteer_active_event_conflict(volunteer, excluding_event_id):
             'reason': 'volunteer_has_active_incident_in_another_event'
         }
     
-    # Check SOS in those active events
     conflicting_sos = SOSAlert.objects.filter(
         assigned_volunteer=volunteer,
         event__in=active_events,
@@ -211,7 +209,6 @@ def calculate_haversine_distance(lat1, lon1, lat2, lon2):
     """
     from math import radians, cos, sin, asin, sqrt
     
-    # Convert decimal degrees to radians
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
     
     # Haversine formula
@@ -267,8 +264,6 @@ def find_nearby_volunteers(latitude, longitude, event_id, radius_km=None):
     if radius_km is None:
         radius_km = getattr(settings, 'SOS_PROXIMITY_RADIUS_KM', 2.0)
     
-    # Get all eligible responders with our improved filters
-    # (GAP 1 + GAP 2 fixes applied)
     eligible_responders = ResponderLocation.objects.filter(
         event_id=event_id,
         is_active=True,
@@ -285,7 +280,6 @@ def find_nearby_volunteers(latitude, longitude, event_id, radius_km=None):
         user__sosalert__status__in=['assigned', 'in_progress']
     ).distinct()
     
-    # Calculate distances for each responder
     nearby_volunteers = []
     all_distances = []  # Keep track of all for fallback
     
@@ -526,6 +520,11 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     from django.db import transaction
 
+    def get_queryset(self):
+        # Filter out resolved and cancelled SOS alerts to prevent stale notifications
+        # Only show active SOS alerts (reported, assigned, in_progress)
+        return self.queryset.exclude(status__in=['resolved', 'cancelled']).order_by('-created_at')
+
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def accept(self, request, pk=None):
@@ -754,6 +753,19 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             "success": False, 
             "message": "No available volunteers found nearby for this event."
         }, status=404)
+
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        """Mark a SOS alert as read by the organizer/admin"""
+        sos = self.get_object()
+        sos.is_read = True
+        sos.save()
+        return Response({
+            "success": True,
+            "message": "SOS alert marked as read",
+            "id": sos.id,
+            "is_read": sos.is_read
+        }, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
         try:
@@ -1252,7 +1264,20 @@ class NotificationViewSet(viewsets.ModelViewSet):
     pagination_class = NotificationPagination
 
     def get_queryset(self):
-        return self.queryset.filter(user=self.request.user).order_by('-created_at')
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Only show notifications from the last 30 days or unread notifications
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        queryset = self.queryset.filter(user=self.request.user)
+        
+        # Include unread notifications regardless of age, but limit read ones to last 30 days
+        from django.db.models import Q
+        queryset = queryset.filter(
+            Q(is_read=False) | Q(created_at__gte=thirty_days_ago)
+        ).order_by('-created_at')
+        
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

@@ -75,7 +75,6 @@ const CrowdHeatmap = () => {
 
         const fetchPatterns = async () => {
              try {
-                 // Fetch historical patterns from actual DB records
                  const res = await api.get(`/monitoring/movement-patterns/${targetEventId}/`);
                  const pts = res.data.map(loc => [loc.lat, loc.lng, 0.6]); // Lower intensity for history
                  pointsRef.current = pts;

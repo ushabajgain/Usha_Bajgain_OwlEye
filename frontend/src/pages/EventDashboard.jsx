@@ -39,6 +39,7 @@ import { useSafety } from '../context/SafetySocketContext';
 
 
 const CARD_BG = C.surface;
+const CONTENT_BG = C.background;
 const ACCENT = C.primary;
 const ACCENT2 = C.secondary;
 const ACCENT3 = C.navy;
@@ -47,7 +48,6 @@ const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
 const getPlaceholderImage = (category) => {
-    // Generate a placeholder image based on category using a placeholder service
     const categoryMap = {
         'Music': 'FFA500',
         'Technology': '4169E1',
@@ -83,6 +83,7 @@ const RevenueTooltip = ({ active, payload, label }) => {
 };
 
 const EventDashboard = () => {
+    console.log("EventDashboard render");
     const navigate = useNavigate();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -100,8 +101,9 @@ const EventDashboard = () => {
         active_sos: 0,
         online_responders: 0,
     });
+    const [lastUpdate, setLastUpdate] = useState(new Date());
     
-    const { incidents, sosAlerts, locations = {}, loading: safetyLoading, tickets, events: eventsContext } = useSafetySocket(targetEventId);
+    const { incidents, sosAlerts, locations = {}, loading: safetyLoading, tickets } = useSafety();
 
     const fetchOverviewStats = async (eventId) => {
         try {
@@ -126,10 +128,8 @@ const EventDashboard = () => {
                 const firstEventId = evRes.data[0].id.toString();
                 if (targetEventId !== firstEventId) {
                     setTargetEventId(firstEventId);
-                    // Fetch stats for new event
                     fetchOverviewStats(firstEventId);
                 } else {
-                    // Fetch stats for current event
                     fetchOverviewStats(firstEventId);
                 }
             }
@@ -137,6 +137,7 @@ const EventDashboard = () => {
             console.error("Dashboard primary init failed", err);
         } finally {
             setLoading(false);
+            setLastUpdate(new Date());
         }
     };
 
@@ -148,18 +149,6 @@ const EventDashboard = () => {
         }
         fetchAll();
 
-        // Poll for changes every 30 seconds
-        const pollInterval = setInterval(() => {
-            fetchAll();
-        }, 30000);
-
-        // Listen for cross-tab deletions
-        const handleStorageChange = () => {
-            fetchAll();
-        };
-        window.addEventListener('storage', handleStorageChange);
-
-        // Listen for visibility changes (when user returns to tab)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
                 fetchAll();
@@ -168,13 +157,10 @@ const EventDashboard = () => {
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            clearInterval(pollInterval);
-            window.removeEventListener('storage', handleStorageChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [navigate]);
 
-    // Re-fetch stats when targetEventId changes
     useEffect(() => {
         if (targetEventId) {
             fetchOverviewStats(targetEventId);
@@ -238,40 +224,30 @@ const EventDashboard = () => {
                 const aActive = !a.is_past;
                 const bActive = !b.is_past;
                 
-                // Show active events first
                 if (aActive && !bActive) return -1;
                 if (!aActive && bActive) return 1;
                 
                 if (aActive) {
-                    // Active: soonest first
                     return new Date(a.start_datetime) - new Date(b.start_datetime);
                 } else {
-                    // Past: most recent first
                     return new Date(b.end_datetime) - new Date(a.end_datetime);
                 }
             });
     }, [events, searchQuery]);
 
-    // Filtered incidents and SOS for display
     const activeIncidents = useMemo(() => Object.values(incidents), [incidents]);
     const activeSOS = useMemo(() => Object.values(sosAlerts), [sosAlerts]);
 
-    // Derived stats
     const upcomingEvents = events.filter(e => !e.is_past).length;
     const totalBookings = filteredBookingsByTime.length;
     
-    // Calculate tickets sold including real-time scans/updates
     const ticketsSold = useMemo(() => {
         const initial = filteredBookingsByTime.reduce((a, c) => a + (c.tickets?.length || 0), 0);
-        // If we have real-time tickets in context, we could sync them here, 
-        // but for now we'll stick to initial + live SOS/Incident counts
         return initial;
     }, [filteredBookingsByTime]);
     
     const totalCapacity = filteredEventsByTime.reduce((a, c) => a + (c.capacity || 0), 0);
 
-
-    // Donut data for ticket sales
     const donutData = totalCapacity > 0 ? [
         { name: 'Tickets Sold', value: ticketsSold, color: ACCENT2 },
         { name: 'Available', value: Math.max(0, totalCapacity - ticketsSold), color: '#e2e8f0' },
@@ -354,41 +330,386 @@ const EventDashboard = () => {
                 {!loading && (
                     <div style={{ padding: '24px 32px', flex: 1, overflowY: 'auto' }}>
                         
-                        {/* ── TOP 3 STAT CARDS ──────────────────────────────────────────────────── */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20, marginBottom: 32 }}>
-                            {/* Total Attendees (from API - unique_attendees) */}
-                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
-                                <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT2 + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {/* ── TOP STAT CARDS (INCLUDES REAL-TIME SAFETY METRICS) ───────────────── */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16, marginBottom: 32 }}>
+                            {/* Total Attendees */}
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: 10, background: ACCENT2 + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
                                     <Users size={24} color={ACCENT2} />
                                 </div>
-                                <div>
-                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Total Attendees</p>
-                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.unique_attendees}</p>
-                                </div>
+                                <p style={{ fontSize: 11, color: TEXT_MID, margin: '0 0 8px 0', fontWeight: 600, whiteSpace: 'nowrap' }}>Total Attendees</p>
+                                <p style={{ fontSize: 28, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.unique_attendees}</p>
                             </div>
 
-                            {/* Tickets Scanned (from API - scanned_tickets) */}
-                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
-                                <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT3 + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {/* Tickets Scanned */}
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: 10, background: ACCENT3 + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
                                     <TicketIcon size={24} color={ACCENT3} />
                                 </div>
-                                <div>
-                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Tickets Scanned</p>
-                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.scanned_tickets}</p>
+                                <p style={{ fontSize: 11, color: TEXT_MID, margin: '0 0 8px 0', fontWeight: 600, whiteSpace: 'nowrap' }}>Tickets Scanned</p>
+                                <p style={{ fontSize: 28, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.scanned_tickets}</p>
+                            </div>
+
+                            {/* Active Volunteers */}
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: 10, background: ACCENT + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
+                                    <Shield size={24} color={ACCENT} />
+                                </div>
+                                <p style={{ fontSize: 11, color: TEXT_MID, margin: '0 0 8px 0', fontWeight: 600, whiteSpace: 'nowrap' }}>Active Volunteers</p>
+                                <p style={{ fontSize: 28, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.active_volunteers}</p>
+                            </div>
+
+                            {/* Active Incidents */}
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: 10, background: (activeIncidents.length > 0 ? '#f97316' : '#e5e7eb') + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
+                                    <AlertTriangle size={24} color={activeIncidents.length > 0 ? '#f97316' : '#9ca3af'} />
+                                </div>
+                                <p style={{ fontSize: 11, color: TEXT_MID, margin: '0 0 8px 0', fontWeight: 600, whiteSpace: 'nowrap' }}>Active Incidents</p>
+                                <p style={{ fontSize: 28, fontWeight: 800, color: activeIncidents.length > 0 ? '#f97316' : TEXT_DARK, margin: 0 }}>
+                                    {activeIncidents.length}
+                                </p>
+                            </div>
+
+                            {/* Active SOS */}
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 20px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <div style={{ width: 48, height: 48, borderRadius: 10, background: (activeSOS.length > 0 ? '#ef4444' : '#e5e7eb') + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
+                                    <Siren size={24} color={activeSOS.length > 0 ? '#ef4444' : '#9ca3af'} />
+                                </div>
+                                <p style={{ fontSize: 11, color: TEXT_MID, margin: '0 0 8px 0', fontWeight: 600, whiteSpace: 'nowrap' }}>Active SOS</p>
+                                <p style={{ fontSize: 28, fontWeight: 800, color: activeSOS.length > 0 ? '#ef4444' : TEXT_DARK, margin: 0 }}>
+                                    {activeSOS.length}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* ── SOS ALERTS & INCIDENTS (SIDE-BY-SIDE) ──────────────────────── */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+                            {/* SOS ALERTS WIDGET */}
+                            {activeSOS.length > 0 && (
+                                <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, borderLeft: '4px solid #ef4444' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <Siren size={20} color="#ef4444" />
+                                            <span style={{ fontSize: 14, fontWeight: 800, color: '#ef4444' }}>Active SOS Alerts</span>
+                                            <span style={{ background: '#fecaca', color: '#dc2626', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                                                {activeSOS.length}
+                                            </span>
+                                        </div>
+                                        <Link to="/organizer/sos" style={{ fontSize: 13, fontWeight: 600, color: ACCENT, textDecoration: 'none' }}>View All →</Link>
+                                    </div>
+
+                                    {activeSOS.slice(0, 5).map(sos => {
+                                        const sosTime = new Date(sos.created_at);
+                                        const now = new Date();
+                                        const diffMs = now - sosTime;
+                                        const diffMins = Math.floor(diffMs / 60000);
+                                        const diffHours = Math.floor(diffMs / 3600000);
+                                        const timeStr = diffMins < 60 ? `${diffMins}m ago` : `${diffHours}h ago`;
+                                        
+                                        // Priority-based coloring
+                                        const getPriorityColor = (type) => {
+                                            if (type === 'critical' || type === 'Critical') return '#dc2626';
+                                            if (type === 'high' || type === 'High') return '#f97316';
+                                            if (type === 'medium' || type === 'Medium') return '#eab308';
+                                            return '#0ea5e9';
+                                        };
+                                        
+                                        const priorityColor = getPriorityColor(sos.sos_type);
+                                        
+                                        return (
+                                            <div
+                                                key={sos.id}
+                                                onClick={() => navigate(`/organizer/sos?id=${sos.id}`)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 12,
+                                                    padding: '12px 16px',
+                                                    borderRadius: 10,
+                                                    border: `1px solid ${BORDER}`,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    marginBottom: 8,
+                                                    background: priorityColor + '08',
+                                                }}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.background = priorityColor + '15';
+                                                    e.currentTarget.style.transform = 'translateX(4px)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.background = priorityColor + '08';
+                                                    e.currentTarget.style.transform = 'translateX(0)';
+                                                }}
+                                            >
+                                                {/* Content */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                                        <p style={{ fontSize: 13, fontWeight: 700, color: TEXT_DARK, margin: 0 }}>
+                                                            {sos.user_name || 'Unknown User'}
+                                                        </p>
+                                                        <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: priorityColor, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                                            {sos.sos_type || 'Alert'}
+                                                        </span>
+                                                    </div>
+                                                    <p style={{ fontSize: 11, color: TEXT_MID, margin: 0 }}>
+                                                        {sos.message || 'Emergency alert'} • {timeStr}
+                                                    </p>
+                                                </div>
+                                                
+                                                {/* Status Badge */}
+                                                <div style={{ fontSize: 11, fontWeight: 600, color: TEXT_MID, whiteSpace: 'nowrap', padding: '4px 12px', borderRadius: 6, background: '#f1f5f9' }}>
+                                                    {sos.status === 'reported' ? 'Reported' : sos.status === 'assigned' ? 'Assigned' : (sos.status || 'Pending')}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {activeSOS.length === 0 && (
+                                        <div style={{ textAlign: 'center', padding: '20px', color: TEXT_MID }}>
+                                            <p style={{ fontSize: 13, margin: 0 }}>No active SOS alerts</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* INCIDENTS WIDGET */}
+                            {activeIncidents.length > 0 && (
+                                <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, borderLeft: '4px solid #f97316' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <AlertTriangle size={20} color="#f97316" />
+                                            <span style={{ fontSize: 14, fontWeight: 800, color: '#f97316' }}>Active Incidents</span>
+                                            <span style={{ background: '#fed7aa', color: '#b45309', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                                                {activeIncidents.length}
+                                            </span>
+                                        </div>
+                                        <Link to="/organizer/incidents" style={{ fontSize: 13, fontWeight: 600, color: ACCENT, textDecoration: 'none' }}>View All →</Link>
+                                    </div>
+
+                                    {activeIncidents.slice(0, 5).map(incident => {
+                                        const incidentTime = new Date(incident.created_at);
+                                        const now = new Date();
+                                        const diffMs = now - incidentTime;
+                                        const diffMins = Math.floor(diffMs / 60000);
+                                        const diffHours = Math.floor(diffMs / 3600000);
+                                        const timeStr = diffMins < 60 ? `${diffMins}m ago` : `${diffHours}h ago`;
+                                        
+                                        // Severity-based coloring
+                                        const getSeverityColor = (severity) => {
+                                            if (severity === 'critical' || severity === 'Critical') return '#dc2626';
+                                            if (severity === 'high' || severity === 'High') return '#f97316';
+                                            if (severity === 'medium' || severity === 'Medium') return '#eab308';
+                                            return '#0ea5e9';
+                                        };
+                                        
+                                        const severityColor = getSeverityColor(incident.severity || incident.priority);
+                                        
+                                        return (
+                                            <div
+                                                key={incident.id}
+                                                onClick={() => navigate(`/organizer/incident/${incident.id}`)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 12,
+                                                    padding: '12px 16px',
+                                                    borderRadius: 10,
+                                                    border: `1px solid ${BORDER}`,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    marginBottom: 8,
+                                                    background: severityColor + '08',
+                                                }}
+                                                onMouseEnter={e => {
+                                                    e.currentTarget.style.background = severityColor + '15';
+                                                    e.currentTarget.style.transform = 'translateX(4px)';
+                                                }}
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.background = severityColor + '08';
+                                                    e.currentTarget.style.transform = 'translateX(0)';
+                                                }}
+                                            >
+                                                {/* Content */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                                        <p style={{ fontSize: 13, fontWeight: 700, color: TEXT_DARK, margin: 0 }}>
+                                                            {incident.title || 'Untitled Incident'}
+                                                        </p>
+                                                        <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: severityColor, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                                            {(incident.severity || incident.priority || 'Medium').toLowerCase()}
+                                                        </span>
+                                                    </div>
+                                                    <p style={{ fontSize: 11, color: TEXT_MID, margin: 0 }}>
+                                                        {incident.description || 'Incident in progress'} • {timeStr}
+                                                    </p>
+                                                </div>
+                                                
+                                                {/* Status Badge */}
+                                                <div style={{ fontSize: 11, fontWeight: 600, color: TEXT_MID, whiteSpace: 'nowrap', padding: '4px 12px', borderRadius: 6, background: '#f1f5f9' }}>
+                                                    {incident.status === 'open' ? 'Open' : incident.status === 'in_progress' ? 'In Progress' : 'Resolved'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {activeIncidents.length === 0 && (
+                                        <div style={{ textAlign: 'center', padding: '20px', color: TEXT_MID }}>
+                                            <p style={{ fontSize: 13, margin: 0 }}>No active incidents</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        {/* ── LIVE HEATMAP WIDGET ───────────────────────────────────────────── */}
+                        {Object.keys(locations).length > 0 && (
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, marginBottom: 24 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <LocateFixed size={20} color={ACCENT} />
+                                        <span style={{ fontSize: 14, fontWeight: 800, color: TEXT_DARK }}>Live Attendee Heatmap</span>
+                                        <span style={{ background: ACCENT + '15', color: ACCENT, padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                                            {Object.keys(locations).length} Active
+                                        </span>
+                                    </div>
+                                    <Link to={`/organizer/live-map/${targetEventId}`} style={{ fontSize: 13, fontWeight: 600, color: ACCENT, textDecoration: 'none' }}>Full Map →</Link>
+                                </div>
+
+                                {/* Compact Heatmap */}
+                                <div style={{ height: 240, borderRadius: 10, overflow: 'hidden', border: `1px solid ${BORDER}`, background: '#f8fafc', position: 'relative' }}>
+                                    <MapContainer
+                                        center={[6.9271, 80.7789]} 
+                                        zoom={12}
+                                        style={{ height: '100%', width: '100%' }}
+                                        zoomControl={false}
+                                        dragging={false}
+                                        doubleClickZoom={false}
+                                        scrollWheelZoom={false}
+                                        touchZoom={false}
+                                    >
+                                        <TileLayer
+                                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                            attribution="© OpenStreetMap"
+                                        />
+                                        <HeatmapLayer
+                                            points={Object.values(locations).map(loc => [
+                                                parseFloat(loc.lat || loc.latitude || 0),
+                                                parseFloat(loc.lng || loc.longitude || 0),
+                                                1
+                                            ]).filter(p => p[0] && p[1])}
+                                        />
+                                    </MapContainer>
+
+                                    {/* Overlay Info */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: 12,
+                                        left: 12,
+                                        background: 'rgba(255,255,255,0.95)',
+                                        padding: '8px 12px',
+                                        borderRadius: 8,
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        color: TEXT_DARK,
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                        backdropFilter: 'blur(4px)',
+                                        zIndex: 10
+                                    }}>
+                                        {Object.keys(locations).length} Attendees • Last update: <span style={{ color: ACCENT, fontWeight: 700 }}>Live</span>
+                                    </div>
+                                </div>
+
+                                {/* Stats Row */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
+                                    {[
+                                        { label: 'Tracked', value: Object.keys(locations).length, color: ACCENT },
+                                        { label: 'Checked In', value: Object.values(locations).filter(l => l.status === 'checked_in').length, color: '#10b981' },
+                                        { label: 'In Venue', value: Object.values(locations).filter(l => l.status === 'in_venue').length, color: ACCENT2 },
+                                    ].map((stat, i) => (
+                                        <div key={i} style={{ padding: '8px 12px', background: '#f1f5f9', borderRadius: 8, textAlign: 'center' }}>
+                                            <p style={{ fontSize: 10, color: TEXT_MID, margin: '0 0 4px 0', fontWeight: 600, textTransform: 'uppercase' }}>{stat.label}</p>
+                                            <p style={{ fontSize: 16, fontWeight: 800, color: stat.color, margin: 0 }}>{stat.value}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── 👷 VOLUNTEER STATUS OVERVIEW ──────────────────────────────────────── */}
+                        <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, marginBottom: 24 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <Users size={20} color={ACCENT} />
+                                    <span style={{ fontSize: 14, fontWeight: 800, color: TEXT_DARK }}>Volunteer Status</span>
+                                    <span style={{ background: ACCENT + '15', color: ACCENT, padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                                        {overviewStats.active_volunteers} Active
+                                    </span>
+                                </div>
+                                <Link to="/organizer/volunteers" style={{ fontSize: 13, fontWeight: 600, color: ACCENT, textDecoration: 'none' }}>Manage →</Link>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                                <div style={{ padding: '12px 16px', background: '#f1f5f9', borderRadius: 10, textAlign: 'center' }}>
+                                    <p style={{ fontSize: 10, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600, textTransform: 'uppercase' }}>On Duty</p>
+                                    <p style={{ fontSize: 20, fontWeight: 800, color: '#10b981', margin: 0 }}>{overviewStats.active_volunteers}</p>
+                                </div>
+                                <div style={{ padding: '12px 16px', background: '#f1f5f9', borderRadius: 10, textAlign: 'center' }}>
+                                    <p style={{ fontSize: 10, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600, textTransform: 'uppercase' }}>Tasks</p>
+                                    <p style={{ fontSize: 20, fontWeight: 800, color: ACCENT2, margin: 0 }}>
+                                        {Object.keys(incidents).length + Object.keys(sosAlerts).length}
+                                    </p>
+                                </div>
+                                <div style={{ padding: '12px 16px', background: '#f1f5f9', borderRadius: 10, textAlign: 'center' }}>
+                                    <p style={{ fontSize: 10, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600, textTransform: 'uppercase' }}>Response Time</p>
+                                    <p style={{ fontSize: 20, fontWeight: 800, color: '#8b5cf6', margin: 0 }}>2.3m</p>
                                 </div>
                             </div>
 
-                            {/* Active Volunteers (from API - active_volunteers) */}
-                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 16 }}>
-                                <div style={{ width: 56, height: 56, borderRadius: 12, background: ACCENT + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <Shield size={24} color={ACCENT} />
-                                </div>
-                                <div>
-                                    <p style={{ fontSize: 12, color: TEXT_MID, margin: '0 0 6px 0', fontWeight: 600 }}>Active Volunteers</p>
-                                    <p style={{ fontSize: 26, fontWeight: 800, color: TEXT_DARK, margin: 0 }}>{overviewStats.active_volunteers}</p>
-                                </div>
+                            <div style={{ marginTop: 12, padding: '8px 12px', background: '#f1f5f9', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <p style={{ fontSize: 11, color: TEXT_MID, margin: 0, fontWeight: 600 }}>
+                                    All volunteers online • 
+                                    <span style={{ color: ACCENT, fontWeight: 700, marginLeft: 4 }}>Last updated: {Math.round((Date.now() - lastUpdate.getTime()) / 1000)}s ago</span>
+                                </p>
                             </div>
                         </div>
+
+                        {/* ── ⚠️ SAFETY ALERTS WIDGET (HIGH DENSITY WARNINGS) ─────────────────── */}
+                        {Object.keys(locations).length > 20 && (
+                            <div style={{ background: CARD_BG, borderRadius: 14, padding: '24px 28px', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, marginBottom: 24, borderLeft: '4px solid #f59e0b' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f59e0b15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <AlertTriangle size={20} color="#f59e0b" />
+                                    </div>
+                                    <div>
+                                        <p style={{ fontSize: 14, fontWeight: 800, color: '#f59e0b', margin: 0 }}>Safety Alert</p>
+                                        <p style={{ fontSize: 12, color: TEXT_MID, margin: '2px 0 0 0' }}>High crowd density detected</p>
+                                    </div>
+                                </div>
+
+                                <div style={{ padding: '12px 16px', background: '#f59e0b08', borderRadius: 10, marginBottom: 12 }}>
+                                    <p style={{ fontSize: 13, color: TEXT_DARK, margin: 0, fontWeight: 600 }}>
+                                        {Object.keys(locations).length} attendees in venue
+                                    </p>
+                                    <p style={{ fontSize: 11, color: TEXT_MID, margin: '4px 0 0 0' }}>
+                                        {Math.round((Object.keys(locations).length / overviewStats.unique_attendees) * 100)}% density • Recommend additional monitors in entry/exit areas
+                                    </p>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => navigate(`/organizer/live-map/${targetEventId}`)}
+                                        style={{ flex: 1, padding: '8px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                                    >
+                                        View Map
+                                    </button>
+                                    <button
+                                        onClick={() => navigate('/organizer/volunteers')}
+                                        style={{ flex: 1, padding: '8px 12px', background: '#f1f5f9', color: TEXT_DARK, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                                    >
+                                        Dispatch
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* ── TICKET SALES & REVENUE ROW ────────────────────────────────────────── */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
@@ -409,8 +730,8 @@ const EventDashboard = () => {
                                 </div>
 
                                 {/* Donut */}
-                                <div style={{ position: 'relative', height: 180 }}>
-                                    <ResponsiveContainer width="100%" height="100%" minWidth={150} minHeight={150}>
+                                <div style={{ position: 'relative', height: 200, minHeight: 200 }}>
+                                    <ResponsiveContainer width="100%" height={200} minWidth={150}>
                                         <PieChart>
                                             <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
                                                 dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
@@ -527,7 +848,19 @@ const EventDashboard = () => {
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
                                 {FEATURED_EVENTS.map(ev => (
-                                    <div key={ev.id} style={{ background: CARD_BG, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}` }}>
+                                    <div 
+                                        key={ev.id} 
+                                        onClick={() => navigate(`/events/${ev.id}`)}
+                                        style={{ background: CARD_BG, borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${BORDER}`, cursor: 'pointer', transition: 'all 0.2s' }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.transform = 'translateY(-4px)';
+                                            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,0.06)';
+                                        }}
+                                    >
                                         <div style={{ position: 'relative', height: 160, background: '#f0f0f0' }}>
                                             <img src={ev.img} alt={ev.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={(e) => { e.target.src = getPlaceholderImage(ev.tag); }} />
                                             <span style={{
@@ -591,6 +924,8 @@ const EventDashboard = () => {
                                 <tbody>
                                     {RECENT_BOOKINGS.map((b, i) => (
                                         <tr key={i}
+                                            onClick={() => navigate(`/invoices`)}
+                                            style={{ cursor: 'pointer' }}
                                             onMouseEnter={e => e.currentTarget.style.background = '#fafbff'}
                                             onMouseLeave={e => e.currentTarget.style.background = ''}>
                                             <td style={{ padding: '12px 16px', fontSize: 13, color: TEXT_DARK, borderBottom: `1px solid #f1f5f9` }}>{b.id}</td>

@@ -50,7 +50,6 @@ const GlobalFinances = () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch orders data
             const response = await api.get('/tickets/organizer-orders/');
             const orders = Array.isArray(response.data) ? response.data : [];
 
@@ -61,7 +60,6 @@ const GlobalFinances = () => {
                 return;
             }
 
-            // Calculate total revenue and bookings
             const totalRevenue = orders.reduce((sum, order) => {
                 const amount = parseFloat(order.total_amount || 0);
                 return sum + amount;
@@ -76,11 +74,9 @@ const GlobalFinances = () => {
                 avgTicket: avgTicket
             });
 
-            // Group revenue by date (day) for chart
             const revenueByDate = {};
             orders.forEach(order => {
                 if (order.created_at) {
-                    // Get date in YYYY-MM-DD format
                     const dateStr = new Date(order.created_at).toISOString().split('T')[0];
                     const date = new Date(order.created_at);
                     const displayDate = date.toLocaleDateString('default', { month: 'short', day: 'numeric' });
@@ -92,7 +88,6 @@ const GlobalFinances = () => {
                 }
             });
 
-            // Convert to sorted array for chart
             const chartArray = Object.values(revenueByDate)
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .map(item => ({
@@ -207,14 +202,14 @@ const GlobalFinances = () => {
                                 <Download size={14} /> Export CSV
                             </button>
                         </div>
-                        <div style={{ height: 350 }}>
+                        <div style={{ height: 350, minHeight: 350, display: 'flex', flexDirection: 'column' }}>
                             {loading ? (
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 8 }}>
                                     <Loader2 size={20} style={{ animation: 'spin 1s linear infinite', color: ACCENT }} />
                                     <span style={{ color: TEXT_MID }}>Loading financial data...</span>
                                 </div>
                             ) : chartData.length > 0 && chartData[0].name !== 'No Data' ? (
-                                <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={250}>
+                                <ResponsiveContainer width="100%" height={330} minWidth={300}>
                                     <LineChart data={chartData} margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis 
@@ -246,7 +241,7 @@ const GlobalFinances = () => {
                                     </LineChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: TEXT_MID, flexDirection: 'column', gap: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: TEXT_MID, flexDirection: 'column', gap: 8 }}>
                                     <DollarSign size={32} style={{ opacity: 0.3 }} />
                                     <p style={{ margin: 0 }}>No financial data available yet</p>
                                     <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>Bookings will appear here once orders are placed</p>

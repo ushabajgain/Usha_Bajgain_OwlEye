@@ -82,9 +82,13 @@ const AdminDashboard = () => {
                 
                 setEvents(eventsRes.data);
                 
-                // Calculate stats
-                const totalUsers = Array.isArray(usersRes.data) ? usersRes.data.length : 0;
-                const totalBookings = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+                // Calculate stats - handle both paginated and non-paginated responses
+                const totalUsers = typeof usersRes.data.count === 'number' 
+                    ? usersRes.data.count 
+                    : (Array.isArray(usersRes.data) ? usersRes.data.length : 0);
+                
+                const ordersData = ordersRes.data.results || (Array.isArray(ordersRes.data) ? ordersRes.data : []);
+                const totalBookings = ordersData;
                 const totalRevenue = totalBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
                 
                 setStats({
@@ -169,7 +173,7 @@ const AdminDashboard = () => {
                     {/* Top Stats */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
                         {[
-                            { label: 'Total Users', value: derivedStats.active_users, Icon: Users, color: ACCENT },
+                            { label: 'Total Users', value: derivedStats.total_users, Icon: Users, color: ACCENT },
                             { label: 'Active Events', value: derivedStats.active_events, Icon: Globe, color: '#3b82f6' },
                             { label: 'Incidents Total', value: derivedStats.active_incidents, Icon: AlertTriangle, color: '#f59e0b' },
                             { label: 'Active SOS', value: derivedStats.security_alerts, Icon: Siren, color: '#ef4444' },
@@ -195,8 +199,8 @@ const AdminDashboard = () => {
                                 </div>
                                 <TrendingUp size={20} color={ACCENT} />
                             </div>
-                            <div style={{ height: 300 }}>
-                                <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
+                            <div style={{ height: 300, minHeight: 300 }}>
+                                <ResponsiveContainer width="100%" height={300} minWidth={200}>
                                     <AreaChart data={activityData}>
                                         <defs>
                                             <linearGradient id="colorLogins" x1="0" y1="0" x2="0" y2="1">

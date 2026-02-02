@@ -11,16 +11,15 @@ from django.conf import settings
 
 User = get_user_model()
 
-# We can connect to redis. Hardcoding localhost as it is on the local setup.
 redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
 
 def haversine(lat1, lon1, lat2, lon2):
-    R = 6371 # Earth radius in km
+    R = 6371
     dLat = math.radians(lat2 - lat1)
     dLon = math.radians(lon2 - lon1)
     a = math.sin(dLat/2)**2 + math.cos(math.radians(lat1))*math.cos(math.radians(lat2))*math.sin(dLon/2)**2
     c = 2 * math.asin(math.sqrt(a))
-    return R * c # Distance in km
+    return R * c
 
 class HeatmapConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -34,19 +33,16 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
         )
         await self.channel_layer.group_add('global', self.channel_name)
         
-        # User-specific group for private notifications
         user = self.scope.get('user')
         if user and user.is_authenticated:
             await self.channel_layer.group_add(f"user_{user.id}", self.channel_name)
             
-            # Scoped Role Groups for targeted broadcasting and security
-                if hasattr(user, 'role'):
+            if hasattr(user, 'role'):
                 await self.channel_layer.group_add(f"role_{user.role}", self.channel_name)
 
         await self.accept()
 
     async def disconnect(self, close_code):
-        # Redis Expiry Cleanup: Wipe dead sessions immediately to prevent Phantom Users on the map
         user = self.scope.get('user')
         if user and user.is_authenticated:
             redis_client.hdel(self.locations_key, str(user.id))
@@ -64,14 +60,12 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             msg_type = data.get('type')
-            user = self.scope.get('user') # Safe dict extraction to prevent fatal WS KeyErrors
+            user = self.scope.get('user')
 
             if msg_type == 'location_update':
-                # GPS Spoofing & Replay Mitigation
                 client_ts = float(data.get('timestamp', datetime.now().timestamp()))
                 now_ts = datetime.now().timestamp()
                 
-                # Bi-directional Tolerance: 30s allowance for slow mobile connections avoiding strict rejection
                 if abs(now_ts - client_ts) > 30:
                     print(f"Rejected stale telemetry")
                     return
@@ -81,7 +75,6 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                 battery = data.get('battery', '100%')
                 user_id = user.id if user and user.is_authenticated else data.get('user_id', 0)
 
-                # CRITICAL FIX: Validate user exists in database (prevent ghost users like "Priya Koirala")
                 user_exists = await self.check_user_exists(user_id)
                 if not user_exists:
                     print(f"Rejected location update from non-existent user {user_id}")
@@ -92,7 +85,6 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                 if not event_info.get('is_active', True):
                     return
                 
-                # Basic user info
                 name = user.full_name if user and user.is_authenticated else data.get('full_name', f"Anonymous {user_id}")
                 role = getattr(user, 'role', 'attendee') if user and user.is_authenticated else data.get('role', 'attendee')
                 phone_number = user.phone_number if (user and user.is_authenticated and hasattr(user, 'phone_number')) else 'N/A'
@@ -116,14 +108,12 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                     distance_km = prev.get('distance', 0.0)
                     
                     if dist_moved < 0.003:
-                        # Skip processing completely if stationary map noise
                         return
                         
                     distance_km += dist_moved
                     first_seen = prev.get('first_seen', now_str)
                     first_seen_ts = prev.get('first_seen_ts', now_ts)
 
-                # Active time calculation
                 active_seconds = now_ts - first_seen_ts
                 hours = int(active_seconds // 3600)
                 minutes = int((active_seconds % 3600) // 60)
@@ -148,19 +138,16 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                     "intensity": 1.0 if role == 'attendee' else 0.5
                 }
 
-                # Redis GEO Store (Instant Spatial Tracking Replacement)
                 geo_users_key = f"event:{self.event_id}:users"
                 redis_client.execute_command('GEOADD', geo_users_key, lng, lat, str(user_id))
-                redis_client.expire(geo_users_key, 60) # Garbage map wipe natively 
+                redis_client.expire(geo_users_key, 60) 
 
-                # Segregated responders grid for O(1) SOS dispatch radius checks
                 if role == 'volunteer' and user and user.is_authenticated:
                     geo_volunteers_key = f"event:{self.event_id}:volunteers"
                     redis_client.execute_command('GEOADD', geo_volunteers_key, lng, lat, str(user_id))
                     redis_client.expire(geo_volunteers_key, 60)
                     await self.update_responder_location(user, lat, lng)
 
-                # Persistence: Save to DB every 60 seconds (Partition potential handled downstream)
                 last_db_save = redis_client.get(f"user:{user_id}:last_save")
                 if not last_db_save or (now_ts - float(last_db_save)) > 60:
                     await self.save_crowd_location(user_id, lat, lng)
@@ -178,8 +165,6 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                         }
                     )
                 
-                # Attendees (General room) get securely HASHED, stripped thermal metadata 
-                # Preventing PII location scraping leaks entirely
                 import hashlib
                 secure_alias = hashlib.sha256(f"{user_id}_SALT_{self.event_id}".encode()).hexdigest()[:16]
                 
@@ -196,16 +181,10 @@ class HeatmapConsumer(AsyncWebsocketConsumer):
                         'intensity': new_data['intensity']
                     }
                 )
-            
-            # Removed unauthenticated mock handlers for `report_incident` and `sos_alert`.
-            # All emergency telemetry must now funnel through strictly authenticated HTTP 
-            # REST APIs (views.py) which handle database persistence, clustering, and RBAC 
-            # before conditionally broadcasting downstream via Channels.
         except Exception as e:
             print(f"WS Receive Error: {e}")
 
     async def get_event_cached(self):
-        # A simple per-connection cache or fetch from DB
         if hasattr(self, '_event_cache'):
             return self._event_cache
             

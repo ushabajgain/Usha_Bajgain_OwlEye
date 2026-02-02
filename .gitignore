@@ -1,4 +1,6 @@
-# OS Files
+# ============================================================================
+# OS & System Files
+# ============================================================================
 .DS_Store
 .DS_Store?
 ._*
@@ -6,8 +8,15 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
 
-# Python
+# ============================================================================
+# Python & Virtual Environments
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -32,8 +41,12 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
 
+# ============================================================================
 # Django
+# ============================================================================
 *.log
 local_settings.py
 /media/
@@ -41,63 +54,112 @@ local_settings.py
 /static/
 db.sqlite3
 *.sqlite3
+/backend/media/
+/backend/staticfiles/
+/backend/static/
 
-# Node / Frontend
+# ============================================================================
+# Node / Frontend (React with Vite)
+# ============================================================================
 node_modules/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/build/
 package-lock.json
-npm-debug.log
-yarn-error.log
-.npm
+yarn.lock
 pnpm-lock.yaml
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.pnpm-debug.log*
 
-# Environment files
+# ============================================================================
+# Environment & Configuration Files
+# ============================================================================
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+.env.test
 
-# Build outputs
+# ============================================================================
+# Build Outputs
+# ============================================================================
 dist/
 dist-ssr/
 build/
 .next/
 out/
+*.tar.gz
 
-# Cache files
+# ============================================================================
+# Cache Files
+# ============================================================================
 .cache/
 .parcel-cache/
 .eslintcache
 .vite/
 .turbo/
 .pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
 
+# ============================================================================
 # Testing & Coverage
+# ============================================================================
 coverage/
+htmlcov/
 .nyc_output/
 test-results/
 blob-report/
 playwright-report/
+.coverage
+.coverage.*
 
-# IDEs
+# ============================================================================
+# IDEs & Editors
+# ============================================================================
 .vscode/
 !.vscode/extensions.json
 .idea/
 .project
 .pydevproject
 .settings/
-
-# IDE specific
-.AppleDouble
-.LSOverride
 *.iml
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+.sublimeproject
+.sublimeworkspace
 
-# Editor temp files
-*.swp
-*.swo
-*~
+# ============================================================================
+# OS Specific Lock Files
+# ============================================================================
+.lock
+*.lock
+*.lockb
+
+# ============================================================================
+# Database Files
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================================
+# Temporary Files
+# ============================================================================
+.tmp/
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
 *.sublime-project
 *.sublime-workspace
 

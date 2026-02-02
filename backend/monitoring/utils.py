@@ -24,7 +24,7 @@ def log_sos_action(sos_alert, action_type, performed_by=None, previous_status=No
     )
 
 # In-memory cache for geocoding to prevent hitting rate limits
-GEOCACHE = {}
+GEOCACHE = {}  # Clear cache on every restart
 
 def reverse_geocode(lat, lon):
     """
@@ -38,7 +38,9 @@ def reverse_geocode(lat, lon):
     # Round to 4 decimal places (~11m precision) for cache hits
     cache_key = (round(float(lat), 4), round(float(lon), 4))
     if cache_key in GEOCACHE:
-        return GEOCACHE[cache_key]
+        cached = GEOCACHE[cache_key]
+        print(f"[GEOCODE] Cache hit for ({lat}, {lon}): {cached}")
+        return cached
         
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1&accept-language=en"
@@ -48,8 +50,13 @@ def reverse_geocode(lat, lon):
         response = requests.get(url, headers=headers, timeout=5)
         data = response.json()
         
+        print(f"[GEOCODE] API response address: {data.get('address', {})}")
+        
         if 'address' in data:
             addr = data.get('address', {})
+            
+            country = addr.get('country', 'Nepal')
+            print(f"[GEOCODE] Country: {country}")
             
             # Try to extract English names (Nominatim with accept-language=en)
             # Look for ward/suburb/neighbourhood first (most specific)
@@ -58,28 +65,32 @@ def reverse_geocode(lat, lon):
             # Then city/town/village
             city = addr.get('city') or addr.get('town') or addr.get('village')
             
-            # Get country
-            country = addr.get('country', 'Nepal')
+            print(f"[GEOCODE] Ward: {ward}, City: {city}")
             
-            # Format: Use ward if available (it's more specific and already includes city)
-            # Otherwise use city, otherwise use ward
-            if ward:
-                result = f"{ward}, {country}"
-            elif city:
-                result = f"{city}, {country}"
-            else:
-                # Fallback to display_name
-                result = data.get('display_name', 'Unknown Location')
-                # Clean up by taking first part before first comma
-                if ',' in result:
-                    result = result.split(',')[0] + ", " + country
-                
+            # Pick the best location name
+            location_part = ward or city or "Unknown"
+            
+            # Strip everything after and including the country name (in case it's included)
+            # This handles cases where Nominatim returns "Ward, Nepal" or "City, Nepal"
+            location_clean = location_part
+            
+            for pattern in [f", {country}", f",{country}"]:
+                if location_clean.endswith(pattern):
+                    location_clean = location_clean[:-len(pattern)].strip()
+                    break
+            
+            # Also remove any trailing commas
+            location_clean = location_clean.rstrip(',').strip()
+            
+            result = f"{location_clean}, {country}"
+            
+            print(f"[GEOCODE] Final result: {result}")
             GEOCACHE[cache_key] = result
             return result
             
         return "Unknown Location"
     except Exception as e:
-        print(f"Geocoding error: {e}")
+        print(f"[GEOCODE] Error: {e}")
         return "Unknown Location"
 
 
@@ -278,8 +289,6 @@ def send_notification(user, title, message, notification_type, event=None, prior
         print(f"WS Broadcast failed for notification: {e}")
 
     return notif
-
-# --- Broadcast Push Optimization ---
 
 def push_group_notification(group_name, title, message, notification_type='broadcast', priority='normal'):
     """

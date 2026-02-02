@@ -33,10 +33,8 @@ const EventTickets = () => {
     const fetchEventAndTickets = async () => {
         setLoading(true);
         try {
-            // Get all tickets for the user
             const ticketsRes = await api.get(`/tickets/my-tickets/`);
             
-            // Filter tickets by event_id
             const eventTickets = ticketsRes.data.filter(t => t.event_details?.id === parseInt(eventId));
             
             if (eventTickets.length > 0) {
@@ -56,7 +54,6 @@ const EventTickets = () => {
     const handleDownload = async (ticket) => {
         setIsDownloading(true);
         try {
-            // Create a temporary container
             const tempContainer = document.createElement('div');
             tempContainer.id = 'temp-ticket-download';
             tempContainer.style.position = 'fixed';
@@ -69,17 +66,14 @@ const EventTickets = () => {
             // Render the TicketCard component into the container
             ReactDOM.render(<TicketCard ticket={ticket} />, tempContainer);
 
-            // Wait for the component to render
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Find the ticket container within the temp container
             const ticketElement = tempContainer.querySelector('#digital-ticket-container');
             
             if (!ticketElement) {
                 throw new Error('Failed to render ticket');
             }
 
-            // Capture with html2canvas
             const canvas = await html2canvas(ticketElement, {
                 scale: 3,
                 useCORS: true,
@@ -89,7 +83,6 @@ const EventTickets = () => {
                 allowTaint: true,
             });
 
-            // Download the image
             const shortId = (ticket.id || 'ticket').toString().split('-')[0];
             const fileName = `ticket-${shortId}.png`;
 

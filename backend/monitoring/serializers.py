@@ -30,7 +30,7 @@ class SOSAlertSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'event', 'user', 'location_data', 'latitude', 'longitude', 'gps_accuracy', 
             'location_name', 'sos_type', 'status', 
-            'priority', 'assigned_volunteer', 'is_active', 'created_at', 'resolved_at'
+            'priority', 'assigned_volunteer', 'is_active', 'is_read', 'created_at', 'resolved_at'
         ]
         read_only_fields = ['user', 'created_at', 'resolved_at']
 

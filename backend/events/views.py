@@ -233,9 +233,6 @@ class EventVolunteersView(APIView):
         recency_minutes = getattr(settings, 'LOCATION_RECENCY_MINUTES', 5)
         recency_cutoff = now - timedelta(minutes=recency_minutes)
 
-        # Get all active ResponderLocation entries for this event with validation
-        # GAP 1 FIX: Ensure event is currently active
-        # GAP 2 FIX: Ensure volunteer has recent location data (within LOCATION_RECENCY_MINUTES)
         responder_locations = ResponderLocation.objects.filter(
             event_id=event_id,
             is_active=True,
