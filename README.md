@@ -142,4 +142,14 @@ This project is developed for educational purposes.
 
 ---
 
+## ⚠️ Troubleshooting
+
+### Database Connection (XAMPP)
+If you encounter `Access denied for user 'root'@'localhost'`, ensure your XAMPP MySQL password is correct.
+1. Update `backend/.env` with your `DB_PASSWORD`.
+2. Verify socket path in `backend/owleye/settings.py` if using macOS/Linux.
+3. Run `python manage.py migrate` manually after fixing credentials.
+
+---
+
 *Built with ❤️ for safer events*

@@ -1,28 +1,20 @@
-"""
-Core API URL Configuration
-
-This module defines all API endpoints for the OwlEye platform.
-"""
-
 from django.urls import path
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-    TokenVerifyView,
-)
-from . import views
+from rest_framework_simplejwt.views import TokenRefreshView
+from .views import RegisterView, CustomTokenObtainPairView, UserProfileView, LogoutView, health_check, api_root
 
 app_name = 'core'
 
 urlpatterns = [
-    # Health check endpoint
-    path('health/', views.health_check, name='health_check'),
+    # Health check
+    path('health/', health_check, name='health_check'),
     
-    # JWT Authentication endpoints
-    path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    # API Root
+    path('', api_root, name='api_root'),
     
-    # API root
-    path('', views.api_root, name='api_root'),
+    # Auth Endpoints
+    path('auth/register/', RegisterView.as_view(), name='auth_register'),
+    path('auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
+    path('auth/me/', UserProfileView.as_view(), name='auth_profile'),
 ]
