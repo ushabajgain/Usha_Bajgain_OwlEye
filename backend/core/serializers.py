@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
+from .models import Event
 
 User = get_user_model()
 
@@ -52,3 +53,30 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.set_password(validated_data['password'])
         user.save()
         return user
+
+
+class EventSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Event creation and viewing.
+    """
+    organizer_name = serializers.CharField(source='organizer.full_name', read_only=True)
+    
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'description', 'category', 
+            'location_lat', 'location_lng', 'address', 
+            'start_date', 'end_date', 'capacity', 
+            'status', 'organizer', 'organizer_name',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'organizer', 'created_at', 'updated_at']
+
+    def validate(self, data):
+        """
+        Check that start_date is before end_date.
+        """
+        if data.get('start_date') and data.get('end_date'):
+            if data['start_date'] >= data['end_date']:
+                raise serializers.ValidationError({"end_date": "End date must be after start date."})
+        return data

@@ -1,6 +1,10 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import RegisterView, CustomTokenObtainPairView, UserProfileView, LogoutView, health_check, api_root
+from .views import (
+    RegisterView, CustomTokenObtainPairView, UserProfileView, LogoutView, 
+    health_check, api_root,
+    EventListCreateView, EventDetailView
+)
 
 app_name = 'core'
 
@@ -17,4 +21,8 @@ urlpatterns = [
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', LogoutView.as_view(), name='auth_logout'),
     path('auth/me/', UserProfileView.as_view(), name='auth_profile'),
+    
+    # Event Endpoints
+    path('events/', EventListCreateView.as_view(), name='event_list_create'),
+    path('events/<int:pk>/', EventDetailView.as_view(), name='event_detail'),
 ]
