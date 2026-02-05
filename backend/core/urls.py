@@ -3,7 +3,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView, CustomTokenObtainPairView, UserProfileView, LogoutView, 
     health_check, api_root,
-    EventListCreateView, EventDetailView
+    EventListCreateView, EventDetailView,
+    JoinEventView, MyTicketsView, ScanTicketView
 )
 
 app_name = 'core'
@@ -25,4 +26,9 @@ urlpatterns = [
     # Event Endpoints
     path('events/', EventListCreateView.as_view(), name='event_list_create'),
     path('events/<int:pk>/', EventDetailView.as_view(), name='event_detail'),
+
+    # Ticket Endpoints
+    path('tickets/join-event/', JoinEventView.as_view(), name='join_event'),
+    path('tickets/my-tickets/', MyTicketsView.as_view(), name='my_tickets'),
+    path('tickets/scan/', ScanTicketView.as_view(), name='scan_ticket'),
 ]

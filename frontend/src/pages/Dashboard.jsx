@@ -1,24 +1,44 @@
 import { useAuth } from "../context/AuthContext";
-import { LogOut, Plus } from "lucide-react";
+import { LogOut, Plus, ScanLine, Ticket as TicketIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import EventList from "../components/EventList";
+import { useState } from "react";
 
 const Dashboard = () => {
     const { user, logout } = useAuth();
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 
     return (
         <div className="min-h-screen bg-gray-900 text-white">
-            <nav className="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-10">
+            <nav className="bg-gray-800 border-b border-gray-700 p-4 sticky top-0 z-20">
                 <div className="max-w-7xl mx-auto flex justify-between items-center">
-                    <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">OwlEye Dashboard</h1>
-                    <div className="flex items-center gap-4">
-                        <span className="text-gray-300 hidden md:inline">Welcome, {user?.full_name || user?.email}</span>
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/50">
+                    <Link to="/dashboard" className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">OwlEye</Link>
+                    <div className="flex items-center gap-2 md:gap-4">
+                        {/* Role Tag */}
+                        <span className="hidden sm:inline px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
                             {user?.role}
                         </span>
+
+                        {/* Nav Links */}
+                        <div className="h-6 w-px bg-gray-700 mx-2 hidden md:block" />
+
+                        <Link to="/my-tickets" className="p-2 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white" title="My Passes">
+                            <TicketIcon size={20} />
+                        </Link>
+
+                        {user?.role === 'ORGANIZER' && (
+                            <Link to="/scan" className="p-2 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white" title="Entry Scanner">
+                                <ScanLine size={24} />
+                            </Link>
+                        )}
+
+                        <div className="h-6 w-px bg-gray-700 mx-2" />
+
                         <button
                             onClick={logout}
-                            className="p-2 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white"
+                            className="p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400 hover:text-red-300"
                             title="Logout"
                         >
                             <LogOut size={20} />
@@ -27,17 +47,17 @@ const Dashboard = () => {
                 </div>
             </nav>
 
-            <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+            <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-10">
                 {/* Header Actions */}
-                <div className="flex justify-between items-end">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-white">Events</h2>
-                        <p className="text-gray-400">Manage and monitor all active events.</p>
+                        <h1 className="text-3xl font-bold text-white mb-2">Upcoming Events</h1>
+                        <p className="text-gray-400">Discover and join events in your area.</p>
                     </div>
                     {user?.role === 'ORGANIZER' && (
                         <Link
                             to="/create-event"
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium shadow-lg shadow-blue-500/20"
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98]"
                         >
                             <Plus size={20} />
                             Create Event
@@ -46,7 +66,7 @@ const Dashboard = () => {
                 </div>
 
                 {/* Event List */}
-                <EventList />
+                <EventList refreshTrigger={refreshTrigger} />
             </main>
         </div>
     );

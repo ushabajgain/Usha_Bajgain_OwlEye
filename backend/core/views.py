@@ -1,4 +1,4 @@
-from rest_framework import generics, status, permissions
+from rest_framework import generics, status, permissions, views
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -6,8 +6,13 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from .models import Event
-from .serializers import RegisterSerializer, UserSerializer, EventSerializer
+from django.shortcuts import get_object_or_404
+from .models import Event, Ticket
+from .serializers import RegisterSerializer, UserSerializer, EventSerializer, TicketSerializer
+
+# For WebSockets
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 User = get_user_model()
 
@@ -16,16 +21,10 @@ User = get_user_model()
 # =============================================================================
 
 class IsOrganizer(permissions.BasePermission):
-    """
-    Custom permission to only allow Organizers to create events.
-    """
     def has_permission(self, request, view):
         return request.user.role == 'ORGANIZER' or request.user.is_staff
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
-    """
-    Custom permission to only allow owners of an object to edit it.
-    """
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
             return True
@@ -56,7 +55,11 @@ def api_root(request):
         },
         'events': {
             'list': '/api/events/',
-            'create': '/api/events/ (POST)',
+        },
+        'tickets': {
+            'my_tickets': '/api/tickets/my-tickets/',
+            'join_event': '/api/tickets/join-event/',
+            'scan': '/api/tickets/scan/',
         }
     })
 
@@ -99,9 +102,6 @@ class LogoutView(generics.GenericAPIView):
 # =============================================================================
 
 class EventListCreateView(generics.ListCreateAPIView):
-    """
-    List all events or create a new event.
-    """
     queryset = Event.objects.all().order_by('-created_at')
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -115,25 +115,108 @@ class EventListCreateView(generics.ListCreateAPIView):
         serializer.save(organizer=self.request.user)
     
     def get_queryset(self):
-        """
-        Filter events. Organizers see their own drafts. 
-        Attendees only see active events (logic can be expanded).
-        """
-        user = self.request.user
         queryset = Event.objects.all().order_by('-start_date')
-        
-        # Filtering examples
         category = self.request.query_params.get('category')
         if category:
             queryset = queryset.filter(category=category)
-            
         return queryset
 
 
 class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    Retrieve, update or delete an event.
-    """
     queryset = Event.objects.all()
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
+
+
+# =============================================================================
+# TICKETING VIEWS
+# =============================================================================
+
+class JoinEventView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        event_id = request.data.get('event_id')
+        event = get_object_or_404(Event, id=event_id)
+
+        if Ticket.objects.filter(event=event, user=request.user).exists():
+            return Response(
+                {"detail": "You are already registered for this event."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        current_ticket_count = Ticket.objects.filter(event=event).count()
+        if current_ticket_count >= event.capacity:
+            return Response(
+                {"detail": "This event has reached its maximum capacity."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if event.status != 'ACTIVE':
+            return Response(
+                {"detail": "This event is not currently accepting registrations."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        ticket = Ticket.objects.create(event=event, user=request.user)
+        serializer = TicketSerializer(ticket)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class MyTicketsView(generics.ListAPIView):
+    serializer_class = TicketSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Ticket.objects.filter(user=self.request.user).order_by('-created_at')
+
+
+class ScanTicketView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        qr_token = request.data.get('qr_token')
+        ticket = get_object_or_404(Ticket, qr_token=qr_token)
+        event = ticket.event
+
+        if event.organizer != request.user and not request.user.is_staff:
+            return Response(
+                {"detail": "You do not have permission to scan tickets for this event."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if ticket.status == 'SCANNED':
+            return Response(
+                {"detail": f"Ticket already scanned at {ticket.scan_timestamp}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if ticket.status == 'INVALIDATED':
+            return Response(
+                {"detail": "This ticket has been invalidated."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        ticket.status = 'SCANNED'
+        ticket.scan_timestamp = timezone.now()
+        ticket.save()
+
+        event.current_attendance += 1
+        event.save()
+
+        # Trigger real-time update via WebSockets
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'attendance_{event.id}',
+            {
+                'type': 'attendance_update',
+                'current_attendance': event.current_attendance,
+                'capacity': event.capacity
+            }
+        )
+
+        serializer = TicketSerializer(ticket)
+        return Response({
+            "message": "Ticket validated successfully",
+            "ticket": serializer.data
+        }, status=status.HTTP_200_OK)

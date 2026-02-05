@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
-from .models import Event
+from .models import Event, Ticket
 
 User = get_user_model()
 
@@ -60,17 +60,24 @@ class EventSerializer(serializers.ModelSerializer):
     Serializer for Event creation and viewing.
     """
     organizer_name = serializers.CharField(source='organizer.full_name', read_only=True)
-    
+    is_joined = serializers.SerializerMethodField()
+
     class Meta:
         model = Event
         fields = [
             'id', 'title', 'description', 'category', 
             'location_lat', 'location_lng', 'address', 
-            'start_date', 'end_date', 'capacity', 
-            'status', 'organizer', 'organizer_name',
+            'start_date', 'end_date', 'capacity', 'current_attendance',
+            'status', 'organizer', 'organizer_name', 'is_joined',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'organizer', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organizer', 'current_attendance', 'created_at', 'updated_at']
+
+    def get_is_joined(self, obj):
+        user = self.context.get('request').user
+        if user and user.is_authenticated:
+            return Ticket.objects.filter(event=obj, user=user).exists()
+        return False
 
     def validate(self, data):
         """
@@ -80,3 +87,21 @@ class EventSerializer(serializers.ModelSerializer):
             if data['start_date'] >= data['end_date']:
                 raise serializers.ValidationError({"end_date": "End date must be after start date."})
         return data
+
+
+class TicketSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Ticket details.
+    """
+    event_title = serializers.CharField(source='event.title', read_only=True)
+    event_start_date = serializers.DateTimeField(source='event.start_date', read_only=True)
+    event_address = serializers.CharField(source='event.address', read_only=True)
+    user_full_name = serializers.CharField(source='user.full_name', read_only=True)
+
+    class Meta:
+        model = Ticket
+        fields = [
+            'id', 'event', 'event_title', 'event_start_date', 'event_address',
+            'user', 'user_full_name', 'qr_token', 'status', 'scan_timestamp', 'created_at'
+        ]
+        read_only_fields = ['id', 'user', 'qr_token', 'status', 'scan_timestamp', 'created_at']

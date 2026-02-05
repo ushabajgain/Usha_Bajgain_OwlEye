@@ -1,55 +1,95 @@
 import { useEffect, useState } from "react";
 import api from "../api";
-import { Calendar, MapPin, Users } from "lucide-react";
+import { Calendar, MapPin, Users, Ticket as TicketIcon, Loader2, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 
-const EventCard = ({ event }) => (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-blue-500/50 transition-colors shadow-lg">
-        <div className="h-32 bg-gradient-to-r from-blue-900 to-purple-900 relative">
-            <span className={`absolute top-3 right-3 px-2 py-1 text-xs font-bold rounded ${event.status === 'ACTIVE' ? 'bg-green-500/20 text-green-300 border border-green-500/50' :
-                    'bg-gray-500/20 text-gray-300 border border-gray-500/50'
-                }`}>
-                {event.status}
-            </span>
-        </div>
-        <div className="p-5">
-            <h3 className="text-xl font-bold text-white mb-2">{event.title}</h3>
-            <div className="space-y-2 text-sm text-gray-400">
-                <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-blue-400" />
-                    <span>{format(new Date(event.start_date), "MMM d, yyyy • h:mm a")}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <MapPin size={16} className="text-red-400" />
-                    <span className="truncate">{event.address}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Users size={16} className="text-purple-400" />
-                    <span>Capacity: {event.capacity}</span>
+const EventCard = ({ event, onJoin }) => {
+    const [joining, setJoining] = useState(false);
+
+    const handleJoin = async () => {
+        setJoining(true);
+        await onJoin(event.id);
+        setJoining(false);
+    };
+
+    return (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-blue-500/50 transition-colors shadow-lg flex flex-col h-full">
+            <div className="h-32 bg-gradient-to-r from-blue-900 to-purple-900 relative">
+                <span className={`absolute top-3 right-3 px-2 py-1 text-xs font-bold rounded ${event.status === 'ACTIVE' ? 'bg-green-500/20 text-green-300 border border-green-500/50' :
+                        'bg-gray-500/20 text-gray-300 border border-gray-500/50'
+                    }`}>
+                    {event.status}
+                </span>
+                <div className="absolute top-3 left-3 px-2 py-1 text-xs font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/50">
+                    {event.category}
                 </div>
             </div>
-            <p className="mt-4 text-gray-500 text-sm line-clamp-2">{event.description}</p>
+            <div className="p-5 flex-grow">
+                <h3 className="text-xl font-bold text-white mb-2">{event.title}</h3>
+                <div className="space-y-2 text-sm text-gray-400">
+                    <div className="flex items-center gap-2">
+                        <Calendar size={16} className="text-blue-400" />
+                        <span>{format(new Date(event.start_date), "MMM d, yyyy • h:mm a")}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <MapPin size={16} className="text-red-400" />
+                        <span className="truncate">{event.address}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Users size={16} className="text-purple-400" />
+                        <span>{event.current_attendance} / {event.capacity} registered</span>
+                    </div>
+                </div>
+                <p className="mt-4 text-gray-400 text-sm line-clamp-2">{event.description}</p>
+            </div>
+            <div className="p-5 pt-0 mt-auto">
+                {event.is_joined ? (
+                    <div className="flex items-center justify-center gap-2 w-full py-2 bg-green-500/10 text-green-400 rounded-lg border border-green-500/30 font-medium">
+                        <CheckCircle size={18} />
+                        Registered
+                    </div>
+                ) : (
+                    <button
+                        onClick={handleJoin}
+                        disabled={joining || event.status !== 'ACTIVE' || event.current_attendance >= event.capacity}
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {joining ? <Loader2 className="animate-spin" size={18} /> : <TicketIcon size={18} />}
+                        Join Event
+                    </button>
+                )}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
-const EventList = () => {
+const EventList = ({ refreshTrigger }) => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const fetchEvents = async () => {
+        try {
+            const res = await api.get("/events/");
+            setEvents(res.data);
+        } catch (err) {
+            console.error("Failed to fetch events", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchEvents = async () => {
-            try {
-                const res = await api.get("/events/");
-                setEvents(res.data);
-            } catch (err) {
-                console.error("Failed to fetch events", err);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchEvents();
-    }, []);
+    }, [refreshTrigger]);
+
+    const handleJoinEvent = async (eventId) => {
+        try {
+            await api.post("/tickets/join-event/", { event_id: eventId });
+            fetchEvents(); // Refresh to show "Registered" status
+        } catch (err) {
+            alert(err.response?.data?.detail || "Failed to join event");
+        }
+    };
 
     if (loading) return <div className="text-center py-8 text-gray-400">Loading events...</div>;
 
@@ -64,7 +104,7 @@ const EventList = () => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map(event => (
-                <EventCard key={event.id} event={event} />
+                <EventCard key={event.id} event={event} onJoin={handleJoinEvent} />
             ))}
         </div>
     );

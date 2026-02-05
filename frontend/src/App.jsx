@@ -5,6 +5,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import CreateEvent from "./pages/CreateEvent";
+import MyTickets from "./pages/MyTickets";
+import QRScanner from "./pages/QRScanner";
 import Unauthorized from "./pages/Unauthorized";
 
 function App() {
@@ -19,12 +21,14 @@ function App() {
           {/* Protected Routes for Authenticated Users */}
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/my-tickets" element={<MyTickets />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
 
           {/* Organizer Only Routes */}
           <Route element={<ProtectedRoute allowedRoles={['ORGANIZER']} />}>
-            <Route path="/create-event" element={<CreateEvent />} />
+             <Route path="/create-event" element={<CreateEvent />} />
+             <Route path="/scan" element={<QRScanner />} />
           </Route>
 
         </Routes>

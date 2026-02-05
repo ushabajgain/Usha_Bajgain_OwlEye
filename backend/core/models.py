@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
+import uuid
 
 class User(AbstractUser):
     """
@@ -71,6 +72,7 @@ class Event(models.Model):
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
     capacity = models.PositiveIntegerField()
+    current_attendance = models.PositiveIntegerField(default=0, help_text="Real-time check-in count")
     
     # Metadata
     organizer = models.ForeignKey(
@@ -88,3 +90,35 @@ class Event(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.status})"
+
+class Ticket(models.Model):
+    """
+    Ticket entity linking User and Event with QR Code.
+    """
+    class Status(models.TextChoices):
+        ISSUED = 'ISSUED', 'Issued'
+        SCANNED = 'SCANNED', 'Scanned'
+        INVALIDATED = 'INVALIDATED', 'Invalidated'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='tickets')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tickets')
+    qr_token = models.CharField(max_length=100, unique=True, editable=False)
+    status = models.CharField(
+        max_length=20, 
+        choices=Status.choices, 
+        default=Status.ISSUED
+    )
+    scan_timestamp = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('event', 'user') # One ticket per user per event
+
+    def save(self, *args, **kwargs):
+        if not self.qr_token:
+            self.qr_token = str(uuid.uuid4())
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Ticket {self.id} - {self.user.email}"
