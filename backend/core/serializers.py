@@ -82,6 +82,14 @@ class SOSAlertSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id', 'user', 'created_at', 'resolved_at']
 
+class SafetyAlertSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+
+    class Meta:
+        model = SafetyAlert
+        fields = '__all__'
+        read_only_fields = ['id', 'created_by', 'created_at']
+
 class LiveMapEntitySerializer(serializers.Serializer):
     """
     Polymorphic-like serializer for map entities.

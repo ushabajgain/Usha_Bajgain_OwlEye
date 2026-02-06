@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
 import HeatmapMap from "../components/HeatmapMap";
 import IncidentManagement from "../components/IncidentManagement";
+import AlertComposer from "../components/AlertComposer";
+import SafetyAlertListener from "../components/SafetyAlertListener";
 import { ArrowLeft, Users, Zap, ShieldAlert, Loader2, MessageSquareWarning } from "lucide-react";
 
 const EventHeatmap = () => {
@@ -112,6 +114,7 @@ const EventHeatmap = () => {
 
                 {/* Sidebar controls/alerts */}
                 <div className="space-y-6">
+                    <AlertComposer eventId={id} />
                     <IncidentManagement eventId={id} />
 
                     <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
@@ -149,6 +152,8 @@ const EventHeatmap = () => {
                     </div>
                 </div>
             </div>
+            {/* Safety Alerts */}
+            <SafetyAlertListener eventId={id} />
         </div>
     );
 };

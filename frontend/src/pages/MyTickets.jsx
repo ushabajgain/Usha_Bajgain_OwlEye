@@ -4,6 +4,7 @@ import QRCode from "react-qr-code";
 import { format } from "date-fns";
 import { Calendar, MapPin, Ticket as TicketIcon, Loader2, Search } from "lucide-react";
 import LiveTracker from "../components/LiveTracker";
+import SafetyAlertListener from "../components/SafetyAlertListener";
 
 const TicketCard = ({ ticket }) => (
     <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-2xl flex flex-col md:flex-row max-w-3xl mx-auto mb-8">
@@ -23,7 +24,7 @@ const TicketCard = ({ ticket }) => (
                 <div className="flex justify-between items-start mb-4">
                     <h3 className="text-2xl font-bold text-white">{ticket.event_title}</h3>
                     <span className={`px-3 py-1 text-xs font-bold rounded-full ${ticket.status === 'SCANNED' ? 'bg-green-500/20 text-green-300 border border-green-500/50' :
-                            'bg-blue-500/20 text-blue-300 border border-blue-500/50'
+                        'bg-blue-500/20 text-blue-300 border border-blue-500/50'
                         }`}>
                         {ticket.status}
                     </span>
@@ -102,6 +103,7 @@ const MyTickets = () => {
                     {tickets.map(ticket => (
                         <div key={ticket.id}>
                             <LiveTracker eventId={ticket.event} isActive={ticket.status === 'ISSUED'} />
+                            <SafetyAlertListener eventId={ticket.event} />
                             <TicketCard ticket={ticket} />
                         </div>
                     ))}

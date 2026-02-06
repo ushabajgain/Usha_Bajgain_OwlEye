@@ -10,7 +10,8 @@ from django.shortcuts import get_object_or_404
 from .models import Event, Ticket, Incident, SOSAlert, CrowdLocation
 from .serializers import (
     RegisterSerializer, UserSerializer, EventSerializer, 
-    TicketSerializer, IncidentSerializer, SOSAlertSerializer
+    TicketSerializer, IncidentSerializer, SOSAlertSerializer,
+    SafetyAlertSerializer
 )
 
 # For WebSockets
@@ -382,3 +383,33 @@ class SOSAlertDetailView(generics.RetrieveUpdateAPIView):
             }
         )
         return res
+
+# =============================================================================
+# SAFETY ALERT VIEWS
+# =============================================================================
+
+class SafetyAlertListCreateView(generics.ListCreateAPIView):
+    serializer_class = SafetyAlertSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        event_id = self.request.query_params.get('event_id')
+        if event_id:
+            return SafetyAlert.objects.filter(
+                event_id=event_id, 
+                status='ACTIVE'
+            ).order_by('-created_at')
+        return SafetyAlert.objects.filter(status='ACTIVE').order_by('-created_at')
+
+    def perform_create(self, serializer):
+        alert = serializer.save(created_by=self.request.user)
+        
+        # Real-time Broadcast
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'broadcast_{alert.event.id}',
+            {
+                'type': 'safety_alert',
+                'alert': SafetyAlertSerializer(alert).data
+            }
+        )

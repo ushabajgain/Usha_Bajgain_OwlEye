@@ -233,3 +233,48 @@ class SOSAlert(models.Model):
 
     def __str__(self):
         return f"SOS ({self.sos_type}) by {self.user.email} at {self.created_at}"
+
+class SafetyAlert(models.Model):
+    """
+    Broadcasted alerts and emergency instructions for event attendees.
+    """
+    class Severity(models.TextChoices):
+        INFO = 'INFO', 'Information'
+        WARNING = 'WARNING', 'Warning'
+        DANGER = 'DANGER', 'Danger'
+        EMERGENCY = 'EMERGENCY', 'Critical Emergency'
+
+    class Audience(models.TextChoices):
+        ALL = 'ALL', 'All Attendees'
+        VOLUNTEERS = 'VOLUNTEERS', 'Volunteers Only'
+        ZONE = 'ZONE', 'Specific Zone'
+
+    class Status(models.TextChoices):
+        ACTIVE = 'ACTIVE', 'Active'
+        EXPIRED = 'EXPIRED', 'Expired'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='safety_alerts')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_alerts')
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    severity = models.CharField(max_length=15, choices=Severity.choices, default=Severity.INFO)
+    audience_type = models.CharField(max_length=15, choices=Audience.choices, default=Audience.ALL)
+    
+    # Geo-fencing (Optional)
+    lat = models.FloatField(null=True, blank=True)
+    lng = models.FloatField(null=True, blank=True)
+    radius_meters = models.PositiveIntegerField(null=True, blank=True)
+    
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'status']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.severity}: {self.title} ({self.event.title})"

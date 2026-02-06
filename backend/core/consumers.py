@@ -75,6 +75,31 @@ class LiveMapConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(event['entity']))
 
 
+class BroadcastConsumer(AsyncWebsocketConsumer):
+    """
+    Consumer for receiving broadcasted safety alerts and notifications.
+    Attendees/Volunteers connect here for real-time updates.
+    """
+    async def connect(self):
+        self.event_id = self.scope['url_route']['kwargs']['event_id']
+        self.room_group_name = f'broadcast_{self.event_id}'
+        
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def safety_alert(self, event):
+        """
+        Receives a safety alert and sends it to the client.
+        """
+        await self.send(text_data=json.dumps({
+            'type': 'safety_alert',
+            'alert': event['alert']
+        }))
+
+
 class LocationTrackConsumer(AsyncWebsocketConsumer):
     """
     Consumer for attendees to send their live location updates.
