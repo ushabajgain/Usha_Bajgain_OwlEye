@@ -200,13 +200,36 @@ class SOSAlert(models.Model):
     """
     Emergency SOS alerts triggered by users.
     """
+    class Type(models.TextChoices):
+        PANIC = 'PANIC', 'Panic / Distress'
+        MEDICAL = 'MEDICAL', 'Medical Emergency'
+        THREAT = 'THREAT', 'Security Threat'
+        TRAPPED = 'TRAPPED', 'Trapped/Crowd Crush'
+        UNKNOWN = 'UNKNOWN', 'Unknown Emergency'
+
+    class Status(models.TextChoices):
+        ACTIVE = 'ACTIVE', 'Active'
+        ACKNOWLEDGED = 'ACKNOWLEDGED', 'Acknowledged'
+        RESOLVED = 'RESOLVED', 'Resolved'
+
+    class Priority(models.TextChoices):
+        HIGH = 'HIGH', 'High'
+        CRITICAL = 'CRITICAL', 'Critical'
+
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='sos_alerts')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='my_sos_alerts')
     lat = models.FloatField()
     lng = models.FloatField()
-    is_active = models.BooleanField(default=True)
+    sos_type = models.CharField(max_length=20, choices=Type.choices, default=Type.PANIC)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.CRITICAL)
     created_at = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'status']),
+        ]
+
     def __str__(self):
-        return f"SOS by {self.user.email} at {self.created_at}"
+        return f"SOS ({self.sos_type}) by {self.user.email} at {self.created_at}"

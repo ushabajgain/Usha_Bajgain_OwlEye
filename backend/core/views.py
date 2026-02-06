@@ -313,3 +313,72 @@ class IncidentDetailView(generics.RetrieveUpdateAPIView):
             }
         )
         return res
+
+# =============================================================================
+# SOS ALERT VIEWS
+# =============================================================================
+
+class SOSAlertListCreateView(generics.ListCreateAPIView):
+    serializer_class = SOSAlertSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        event_id = self.request.query_params.get('event_id')
+        if event_id:
+            return SOSAlert.objects.filter(event_id=event_id).order_by('-created_at')
+        return SOSAlert.objects.all().order_by('-created_at')
+
+    def perform_create(self, serializer):
+        sos = serializer.save(user=self.request.user)
+        
+        # Real-time Broadcast to Live Map with CRITICAL priority
+        channel_layer = get_channel_layer()
+        entity_data = {
+            'id': f"sos-{sos.id}",
+            'type': 'sos',
+            'lat': sos.lat,
+            'lng': sos.lng,
+            'label': f"CRITICAL SOS: {sos.user.full_name}",
+            'status': sos.status,
+            'severity': 'CRITICAL',
+            'timestamp': str(timezone.now())
+        }
+        
+        async_to_sync(channel_layer.group_send)(
+            f'live_map_{sos.event.id}',
+            {
+                'type': 'entity_update',
+                'entity': entity_data
+            }
+        )
+
+class SOSAlertDetailView(generics.RetrieveUpdateAPIView):
+    queryset = SOSAlert.objects.all()
+    serializer_class = SOSAlertSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        res = super().patch(request, *args, **kwargs)
+        sos = self.get_object()
+        
+        # Broadcast update
+        channel_layer = get_channel_layer()
+        entity_data = {
+            'id': f"sos-{sos.id}",
+            'type': 'sos',
+            'lat': sos.lat,
+            'lng': sos.lng,
+            'label': f"SOS Update: {sos.user.full_name}",
+            'status': sos.status,
+            'severity': 'CRITICAL' if sos.status != 'RESOLVED' else 'LOW',
+            'timestamp': str(timezone.now())
+        }
+        
+        async_to_sync(channel_layer.group_send)(
+            f'live_map_{sos.event.id}',
+            {
+                'type': 'entity_update',
+                'entity': entity_data
+            }
+        )
+        return res

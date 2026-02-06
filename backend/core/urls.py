@@ -5,7 +5,8 @@ from .views import (
     health_check, api_root,
     EventListCreateView, EventDetailView,
     JoinEventView, MyTicketsView, ScanTicketView,
-    IncidentListCreateView, IncidentDetailView
+    IncidentListCreateView, IncidentDetailView,
+    SOSAlertListCreateView, SOSAlertDetailView
 )
 
 app_name = 'core'
@@ -36,4 +37,8 @@ urlpatterns = [
     # Incident Endpoints
     path('incidents/', IncidentListCreateView.as_view(), name='incident_list_create'),
     path('incidents/<int:pk>/', IncidentDetailView.as_view(), name='incident_detail'),
+
+    # SOS Endpoints
+    path('sos/', SOSAlertListCreateView.as_view(), name='sos_list_create'),
+    path('sos/<int:pk>/', SOSAlertDetailView.as_view(), name='sos_detail'),
 ]

@@ -1,7 +1,8 @@
 import { useAuth } from "../context/AuthContext";
-import { LogOut, Plus, ScanLine, Ticket as TicketIcon } from "lucide-react";
+import { LogOut, Plus, ScanLine, Ticket as TicketIcon, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import EventList from "../components/EventList";
+import SOSButton from "../components/SOSButton";
 import { useState } from "react";
 
 const Dashboard = () => {
@@ -67,6 +68,9 @@ const Dashboard = () => {
 
                 {/* Event List */}
                 <EventList refreshTrigger={refreshTrigger} />
+
+                {/* SOS Button */}
+                <SOSButton />
             </main>
         </div>
     );
