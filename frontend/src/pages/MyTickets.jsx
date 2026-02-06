@@ -3,6 +3,7 @@ import api from "../api";
 import QRCode from "react-qr-code";
 import { format } from "date-fns";
 import { Calendar, MapPin, Ticket as TicketIcon, Loader2, Search } from "lucide-react";
+import LiveTracker from "../components/LiveTracker";
 
 const TicketCard = ({ ticket }) => (
     <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-2xl flex flex-col md:flex-row max-w-3xl mx-auto mb-8">
@@ -97,9 +98,12 @@ const MyTickets = () => {
                     </button>
                 </div>
             ) : (
-                <div className="space-y-2">
+                <div className="space-y-6">
                     {tickets.map(ticket => (
-                        <TicketCard key={ticket.id} ticket={ticket} />
+                        <div key={ticket.id}>
+                            <LiveTracker eventId={ticket.event} isActive={ticket.status === 'ISSUED'} />
+                            <TicketCard ticket={ticket} />
+                        </div>
                     ))}
                 </div>
             )}

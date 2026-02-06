@@ -105,3 +105,32 @@ class TicketSerializer(serializers.ModelSerializer):
             'user', 'user_full_name', 'qr_token', 'status', 'scan_timestamp', 'created_at'
         ]
         read_only_fields = ['id', 'user', 'qr_token', 'status', 'scan_timestamp', 'created_at']
+
+class IncidentSerializer(serializers.ModelSerializer):
+    reporter_name = serializers.CharField(source='reporter.full_name', read_only=True)
+    
+    class Meta:
+        model = Incident
+        fields = '__all__'
+        read_only_fields = ['id', 'reporter', 'created_at', 'updated_at']
+
+class SOSAlertSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    
+    class Meta:
+        model = SOSAlert
+        fields = '__all__'
+        read_only_fields = ['id', 'user', 'created_at', 'resolved_at']
+
+class LiveMapEntitySerializer(serializers.Serializer):
+    """
+    Polymorphic-like serializer for map entities.
+    """
+    id = serializers.CharField()
+    type = serializers.CharField() # attendee, volunteer, organizer, incident, sos
+    lat = serializers.FloatField()
+    lng = serializers.FloatField()
+    label = serializers.CharField(required=False)
+    severity = serializers.CharField(required=False)
+    status = serializers.CharField(required=False)
+    timestamp = serializers.DateTimeField()

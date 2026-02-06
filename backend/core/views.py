@@ -204,7 +204,16 @@ class ScanTicketView(views.APIView):
         event.current_attendance += 1
         event.save()
 
-        # Trigger real-time update via WebSockets
+        # Log location for heatmap (at the venue location)
+        CrowdLocation.objects.create(
+            event=event,
+            user=ticket.user,
+            lat=event.location_lat,
+            lng=event.location_lng,
+            source='SCAN'
+        )
+
+        # Trigger real-time attendance update
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f'attendance_{event.id}',
@@ -212,6 +221,15 @@ class ScanTicketView(views.APIView):
                 'type': 'attendance_update',
                 'current_attendance': event.current_attendance,
                 'capacity': event.capacity
+            }
+        )
+
+        # Trigger heatmap individual point update
+        async_to_sync(channel_layer.group_send)(
+            f'heatmap_{event.id}',
+            {
+                'type': 'heatmap_update',
+                'points': [[event.location_lat, event.location_lng, 1.0]], # Intensity 1.0 for a scan
             }
         )
 

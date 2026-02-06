@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import api from "../api";
-import { Calendar, MapPin, Users, Ticket as TicketIcon, Loader2, CheckCircle } from "lucide-react";
+import { Calendar, MapPin, Users, Ticket as TicketIcon, Loader2, CheckCircle, Activity, Map as MapIcon } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const EventCard = ({ event, onJoin }) => {
+    const { user } = useAuth();
     const [joining, setJoining] = useState(false);
 
     const handleJoin = async () => {
@@ -16,7 +19,7 @@ const EventCard = ({ event, onJoin }) => {
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-blue-500/50 transition-colors shadow-lg flex flex-col h-full">
             <div className="h-32 bg-gradient-to-r from-blue-900 to-purple-900 relative">
                 <span className={`absolute top-3 right-3 px-2 py-1 text-xs font-bold rounded ${event.status === 'ACTIVE' ? 'bg-green-500/20 text-green-300 border border-green-500/50' :
-                        'bg-gray-500/20 text-gray-300 border border-gray-500/50'
+                    'bg-gray-500/20 text-gray-300 border border-gray-500/50'
                     }`}>
                     {event.status}
                 </span>
@@ -42,7 +45,27 @@ const EventCard = ({ event, onJoin }) => {
                 </div>
                 <p className="mt-4 text-gray-400 text-sm line-clamp-2">{event.description}</p>
             </div>
-            <div className="p-5 pt-0 mt-auto">
+            <div className="p-5 pt-0 mt-auto flex flex-col gap-2">
+                {user?.role === 'ORGANIZER' && event.organizer === user.id && (
+                    <Link
+                        to={`/heatmap/${event.id}`}
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+                    >
+                        <Activity size={18} className="text-red-400" />
+                        Monitor Heatmap
+                    </Link>
+                )}
+
+                {user?.role === 'ORGANIZER' && event.organizer === user.id && (
+                    <Link
+                        to={`/live-map/${event.id}`}
+                        className="flex items-center justify-center gap-2 w-full py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+                    >
+                        <MapIcon size={18} className="text-blue-400" />
+                        Live Situational Map
+                    </Link>
+                )}
+
                 {event.is_joined ? (
                     <div className="flex items-center justify-center gap-2 w-full py-2 bg-green-500/10 text-green-400 rounded-lg border border-green-500/30 font-medium">
                         <CheckCircle size={18} />

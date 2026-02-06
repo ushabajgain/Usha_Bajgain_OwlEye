@@ -7,6 +7,8 @@ import Dashboard from "./pages/Dashboard";
 import CreateEvent from "./pages/CreateEvent";
 import MyTickets from "./pages/MyTickets";
 import QRScanner from "./pages/QRScanner";
+import EventHeatmap from "./pages/EventHeatmap";
+import LiveEventMap from "./pages/LiveEventMap";
 import Unauthorized from "./pages/Unauthorized";
 
 function App() {
@@ -27,8 +29,10 @@ function App() {
 
           {/* Organizer Only Routes */}
           <Route element={<ProtectedRoute allowedRoles={['ORGANIZER']} />}>
-             <Route path="/create-event" element={<CreateEvent />} />
-             <Route path="/scan" element={<QRScanner />} />
+            <Route path="/create-event" element={<CreateEvent />} />
+            <Route path="/scan" element={<QRScanner />} />
+            <Route path="/heatmap/:id" element={<EventHeatmap />} />
+            <Route path="/live-map/:id" element={<LiveEventMap />} />
           </Route>
 
         </Routes>

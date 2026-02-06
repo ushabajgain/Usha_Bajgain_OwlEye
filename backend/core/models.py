@@ -122,3 +122,73 @@ class Ticket(models.Model):
 
     def __str__(self):
         return f"Ticket {self.id} - {self.user.email}"
+
+class CrowdLocation(models.Model):
+    """
+    Real-time location data points for heatmap generation.
+    """
+    class Source(models.TextChoices):
+        SCAN = 'SCAN', 'Ticket Scan'
+        LIVE = 'LIVE', 'Live Tracking'
+        MANUAL = 'MANUAL', 'Manual Log'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='crowd_locations')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='location_logs')
+    lat = models.FloatField()
+    lng = models.FloatField()
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.LIVE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'timestamp']),
+            models.Index(fields=['lat', 'lng']),
+        ]
+
+    def __str__(self):
+        return f"Loc for Event {self.event.id} at {self.timestamp}"
+
+class Incident(models.Model):
+    """
+    Reported incidents during an event.
+    """
+    class Severity(models.TextChoices):
+        LOW = 'LOW', 'Low'
+        MEDIUM = 'MEDIUM', 'Medium'
+        HIGH = 'HIGH', 'High'
+        CRITICAL = 'CRITICAL', 'Critical'
+
+    class Status(models.TextChoices):
+        REPORTED = 'REPORTED', 'Reported'
+        INVESTIGATING = 'INVESTIGATING', 'Investigating'
+        RESOLVED = 'RESOLVED', 'Resolved'
+        FALSE_ALARM = 'FALSE_ALARM', 'False Alarm'
+
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='incidents')
+    reporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='reported_incidents')
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    lat = models.FloatField()
+    lng = models.FloatField()
+    severity = models.CharField(max_length=10, choices=Severity.choices, default=Severity.MEDIUM)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.REPORTED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.title} ({self.severity})"
+
+class SOSAlert(models.Model):
+    """
+    Emergency SOS alerts triggered by users.
+    """
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='sos_alerts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='my_sos_alerts')
+    lat = models.FloatField()
+    lng = models.FloatField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"SOS by {self.user.email} at {self.created_at}"
