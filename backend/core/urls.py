@@ -7,7 +7,8 @@ from .views import (
     JoinEventView, MyTicketsView, ScanTicketView,
     IncidentListCreateView, IncidentDetailView,
     SOSAlertListCreateView, SOSAlertDetailView,
-    SafetyAlertListCreateView
+    SafetyAlertListCreateView,
+    ResponderLocationUpdateView, ResponderLocationListView
 )
 
 app_name = 'core'
@@ -45,4 +46,8 @@ urlpatterns = [
 
     # Safety Alert Endpoints
     path('alerts/', SafetyAlertListCreateView.as_view(), name='safety_alert_list_create'),
+
+    # Responder Endpoints
+    path('responders/update/', ResponderLocationUpdateView.as_view(), name='responder_location_update'),
+    path('responders/', ResponderLocationListView.as_view(), name='responder_location_list'),
 ]

@@ -278,3 +278,29 @@ class SafetyAlert(models.Model):
 
     def __str__(self):
         return f"{self.severity}: {self.title} ({self.event.title})"
+
+class ResponderLocation(models.Model):
+    """
+    Real-time high-accuracy tracking for staff, volunteers, and responders.
+    """
+    class Status(models.TextChoices):
+        AVAILABLE = 'AVAILABLE', 'Available'
+        BUSY = 'BUSY', 'Busy'
+        RESPONDING = 'RESPONDING', 'Responding'
+        OFFLINE = 'OFFLINE', 'Offline'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='responder_locations')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='staff_positions')
+    lat = models.FloatField()
+    lng = models.FloatField()
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.AVAILABLE)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'event')
+        indexes = [
+            models.Index(fields=['event', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.status} at {self.last_updated}"

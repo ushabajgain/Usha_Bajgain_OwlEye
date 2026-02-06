@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Event, Ticket, Incident, SOSAlert
+from .models import Event, Ticket, Incident, SOSAlert, CrowdLocation, SafetyAlert, ResponderLocation
 
 User = get_user_model()
 
@@ -49,9 +49,6 @@ class EventSerializer(serializers.ModelSerializer):
         return False
 
 class TicketSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Ticket details.
-    """
     event_title = serializers.CharField(source='event.title', read_only=True)
     event_start_date = serializers.DateTimeField(source='event.start_date', read_only=True)
     event_address = serializers.CharField(source='event.address', read_only=True)
@@ -90,12 +87,18 @@ class SafetyAlertSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id', 'created_by', 'created_at']
 
+class ResponderLocationSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    role = serializers.CharField(source='user.role', read_only=True)
+
+    class Meta:
+        model = ResponderLocation
+        fields = '__all__'
+        read_only_fields = ['id', 'user', 'last_updated']
+
 class LiveMapEntitySerializer(serializers.Serializer):
-    """
-    Polymorphic-like serializer for map entities.
-    """
     id = serializers.CharField()
-    type = serializers.CharField() # attendee, volunteer, organizer, incident, sos
+    type = serializers.CharField() 
     lat = serializers.FloatField()
     lng = serializers.FloatField()
     label = serializers.CharField(required=False)

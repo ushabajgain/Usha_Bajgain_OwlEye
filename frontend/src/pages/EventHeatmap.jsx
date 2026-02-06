@@ -5,6 +5,7 @@ import HeatmapMap from "../components/HeatmapMap";
 import IncidentManagement from "../components/IncidentManagement";
 import AlertComposer from "../components/AlertComposer";
 import SafetyAlertListener from "../components/SafetyAlertListener";
+import ResponderTracker from "../components/ResponderTracker";
 import { ArrowLeft, Users, Zap, ShieldAlert, Loader2, MessageSquareWarning } from "lucide-react";
 
 const EventHeatmap = () => {
@@ -114,6 +115,7 @@ const EventHeatmap = () => {
 
                 {/* Sidebar controls/alerts */}
                 <div className="space-y-6">
+                    <ResponderTracker eventId={id} />
                     <AlertComposer eventId={id} />
                     <IncidentManagement eventId={id} />
 

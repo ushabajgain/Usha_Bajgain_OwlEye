@@ -29,6 +29,10 @@ export const getIcon = (type, severity = null) => {
             color = severity === 'CRITICAL' ? "#ef4444" : "#f97316";
             IconComponent = AlertTriangle;
             break;
+        case 'authority':
+            color = "#6366f1"; // Indigo
+            IconComponent = Shield;
+            break;
         case 'sos':
             color = "#ef4444"; // Red
             IconComponent = Zap;

@@ -11,7 +11,7 @@ from .models import Event, Ticket, Incident, SOSAlert, CrowdLocation
 from .serializers import (
     RegisterSerializer, UserSerializer, EventSerializer, 
     TicketSerializer, IncidentSerializer, SOSAlertSerializer,
-    SafetyAlertSerializer
+    SafetyAlertSerializer, ResponderLocationSerializer
 )
 
 # For WebSockets
@@ -413,3 +413,63 @@ class SafetyAlertListCreateView(generics.ListCreateAPIView):
                 'alert': SafetyAlertSerializer(alert).data
             }
         )
+
+# =============================================================================
+# RESPONDER LOCATION VIEWS
+# =============================================================================
+
+class ResponderLocationUpdateView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.role not in ['VOLUNTEER', 'ORGANIZER', 'AUTHORITY'] and not user.is_staff:
+            return Response(
+                {"detail": "Only responders can share their live location."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        event_id = request.data.get('event_id')
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        status_val = request.data.get('status', 'AVAILABLE')
+
+        event = get_object_or_404(Event, id=event_id)
+        
+        location, created = ResponderLocation.objects.update_or_create(
+            user=user,
+            event=event,
+            defaults={'lat': lat, 'lng': lng, 'status': status_val}
+        )
+
+        # Real-time Broadcast to Live Map
+        channel_layer = get_channel_layer()
+        entity_data = {
+            'id': f"staff-{user.id}",
+            'type': user.role.lower(),
+            'lat': lat,
+            'lng': lng,
+            'label': f"{user.full_name} ({status_val})",
+            'status': status_val,
+            'timestamp': str(timezone.now())
+        }
+        
+        async_to_sync(channel_layer.group_send)(
+            f'live_map_{event.id}',
+            {
+                'type': 'entity_update',
+                'entity': entity_data
+            }
+        )
+
+        return Response(ResponderLocationSerializer(location).data)
+
+class ResponderLocationListView(generics.ListAPIView):
+    serializer_class = ResponderLocationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        event_id = self.request.query_params.get('event_id')
+        if event_id:
+            return ResponderLocation.objects.filter(event_id=event_id)
+        return ResponderLocation.objects.all()
