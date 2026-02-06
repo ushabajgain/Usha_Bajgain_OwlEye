@@ -9,6 +9,7 @@ import MyTickets from "./pages/MyTickets";
 import QRScanner from "./pages/QRScanner";
 import EventHeatmap from "./pages/EventHeatmap";
 import LiveEventMap from "./pages/LiveEventMap";
+import LiveCommandCenter from "./pages/LiveCommandCenter";
 import Unauthorized from "./pages/Unauthorized";
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
             <Route path="/scan" element={<QRScanner />} />
             <Route path="/heatmap/:id" element={<EventHeatmap />} />
             <Route path="/live-map/:id" element={<LiveEventMap />} />
+            <Route path="/command-center/:id" element={<LiveCommandCenter />} />
           </Route>
 
         </Routes>

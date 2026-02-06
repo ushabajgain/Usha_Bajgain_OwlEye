@@ -473,3 +473,21 @@ class ResponderLocationListView(generics.ListAPIView):
         if event_id:
             return ResponderLocation.objects.filter(event_id=event_id)
         return ResponderLocation.objects.all()
+
+class EventDashboardStatsView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, event_id):
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Aggregated telemetry
+        stats = {
+            "total_attendees": event.current_attendance,
+            "capacity_percentage": round((event.current_attendance / event.capacity) * 100, 1) if event.capacity > 0 else 0,
+            "active_incidents": Incident.objects.filter(event=event, status__in=['REPORTED', 'INVESTIGATING']).count(),
+            "active_sos": SOSAlert.objects.filter(event=event, status__in=['ACTIVE', 'ACKNOWLEDGED']).count(),
+            "online_staff": ResponderLocation.objects.filter(event=event).exclude(status='OFFLINE').count(),
+            "total_tickets_issued": Ticket.objects.filter(event=event).count(),
+        }
+        
+        return Response(stats)

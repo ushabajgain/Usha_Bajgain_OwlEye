@@ -8,7 +8,8 @@ from .views import (
     IncidentListCreateView, IncidentDetailView,
     SOSAlertListCreateView, SOSAlertDetailView,
     SafetyAlertListCreateView,
-    ResponderLocationUpdateView, ResponderLocationListView
+    ResponderLocationUpdateView, ResponderLocationListView,
+    EventDashboardStatsView
 )
 
 app_name = 'core'
@@ -50,4 +51,7 @@ urlpatterns = [
     # Responder Endpoints
     path('responders/update/', ResponderLocationUpdateView.as_view(), name='responder_location_update'),
     path('responders/', ResponderLocationListView.as_view(), name='responder_location_list'),
+
+    # Dashboard Statistics
+    path('events/<int:event_id>/stats/', EventDashboardStatsView.as_view(), name='event_dashboard_stats'),
 ]

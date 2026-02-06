@@ -50,21 +50,11 @@ const EventCard = ({ event, onJoin }) => {
             <div className="p-5 pt-0 mt-auto flex flex-col gap-2">
                 {user?.role === 'ORGANIZER' && event.organizer === user.id && (
                     <Link
-                        to={`/heatmap/${event.id}`}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+                        to={`/command-center/${event.id}`}
+                        className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all font-bold shadow-lg shadow-blue-500/20 active:scale-95"
                     >
-                        <Activity size={18} className="text-red-400" />
-                        Monitor Heatmap
-                    </Link>
-                )}
-
-                {user?.role === 'ORGANIZER' && event.organizer === user.id && (
-                    <Link
-                        to={`/live-map/${event.id}`}
-                        className="flex items-center justify-center gap-2 w-full py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-                    >
-                        <MapIcon size={18} className="text-blue-400" />
-                        Live Situational Map
+                        <Activity size={18} />
+                        Live Command Center
                     </Link>
                 )}
 
