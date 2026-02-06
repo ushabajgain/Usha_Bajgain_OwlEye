@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../api";
 import HeatmapMap from "../components/HeatmapMap";
-import { ArrowLeft, Users, Zap, ShieldAlert, Loader2 } from "lucide-react";
+import IncidentManagement from "../components/IncidentManagement";
+import { ArrowLeft, Users, Zap, ShieldAlert, Loader2, MessageSquareWarning } from "lucide-react";
 
 const EventHeatmap = () => {
     const { id } = useParams();
@@ -111,6 +112,8 @@ const EventHeatmap = () => {
 
                 {/* Sidebar controls/alerts */}
                 <div className="space-y-6">
+                    <IncidentManagement eventId={id} />
+
                     <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
                         <h3 className="font-bold flex items-center gap-2 mb-4 text-blue-400">
                             <ShieldAlert size={20} />

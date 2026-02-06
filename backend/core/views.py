@@ -7,8 +7,11 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .models import Event, Ticket
-from .serializers import RegisterSerializer, UserSerializer, EventSerializer, TicketSerializer
+from .models import Event, Ticket, Incident, SOSAlert, CrowdLocation
+from .serializers import (
+    RegisterSerializer, UserSerializer, EventSerializer, 
+    TicketSerializer, IncidentSerializer, SOSAlertSerializer
+)
 
 # For WebSockets
 from channels.layers import get_channel_layer
@@ -213,7 +216,7 @@ class ScanTicketView(views.APIView):
             source='SCAN'
         )
 
-        # Trigger real-time attendance update
+        # Trigger real-time updates
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f'attendance_{event.id}',
@@ -224,12 +227,11 @@ class ScanTicketView(views.APIView):
             }
         )
 
-        # Trigger heatmap individual point update
         async_to_sync(channel_layer.group_send)(
             f'heatmap_{event.id}',
             {
                 'type': 'heatmap_update',
-                'points': [[event.location_lat, event.location_lng, 1.0]], # Intensity 1.0 for a scan
+                'points': [[event.location_lat, event.location_lng, 1.0]],
             }
         )
 
@@ -238,3 +240,76 @@ class ScanTicketView(views.APIView):
             "message": "Ticket validated successfully",
             "ticket": serializer.data
         }, status=status.HTTP_200_OK)
+
+# =============================================================================
+# INCIDENT VIEWS
+# =============================================================================
+
+class IncidentListCreateView(generics.ListCreateAPIView):
+    serializer_class = IncidentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        event_id = self.request.query_params.get('event_id')
+        if event_id:
+            return Incident.objects.filter(event_id=event_id).order_by('-created_at')
+        return Incident.objects.all().order_by('-created_at')
+
+    def perform_create(self, serializer):
+        incident = serializer.save(reporter=self.request.user)
+        
+        # Real-time Broadcast
+        channel_layer = get_channel_layer()
+        
+        # 1. Update Live Map
+        entity_data = {
+            'id': f"incident-{incident.id}",
+            'type': 'incident',
+            'lat': incident.lat,
+            'lng': incident.lng,
+            'label': f"New Incident: {incident.get_category_display()}",
+            'severity': incident.severity,
+            'status': incident.status,
+            'category': incident.category,
+            'timestamp': str(timezone.now())
+        }
+        
+        async_to_sync(channel_layer.group_send)(
+            f'live_map_{incident.event.id}',
+            {
+                'type': 'entity_update',
+                'entity': entity_data
+            }
+        )
+
+class IncidentDetailView(generics.RetrieveUpdateAPIView):
+    queryset = Incident.objects.all()
+    serializer_class = IncidentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        res = super().patch(request, *args, **kwargs)
+        incident = self.get_object()
+        
+        # Broadcast status update to Live Map
+        channel_layer = get_channel_layer()
+        entity_data = {
+            'id': f"incident-{incident.id}",
+            'type': 'incident',
+            'lat': incident.lat,
+            'lng': incident.lng,
+            'label': f"Incident: {incident.get_category_display()}",
+            'severity': incident.severity,
+            'status': incident.status,
+            'category': incident.category,
+            'timestamp': str(timezone.now())
+        }
+        
+        async_to_sync(channel_layer.group_send)(
+            f'live_map_{incident.event.id}',
+            {
+                'type': 'entity_update',
+                'entity': entity_data
+            }
+        )
+        return res

@@ -4,7 +4,8 @@ from .views import (
     RegisterView, CustomTokenObtainPairView, UserProfileView, LogoutView, 
     health_check, api_root,
     EventListCreateView, EventDetailView,
-    JoinEventView, MyTicketsView, ScanTicketView
+    JoinEventView, MyTicketsView, ScanTicketView,
+    IncidentListCreateView, IncidentDetailView
 )
 
 app_name = 'core'
@@ -31,4 +32,8 @@ urlpatterns = [
     path('tickets/join-event/', JoinEventView.as_view(), name='join_event'),
     path('tickets/my-tickets/', MyTicketsView.as_view(), name='my_tickets'),
     path('tickets/scan/', ScanTicketView.as_view(), name='scan_ticket'),
+
+    # Incident Endpoints
+    path('incidents/', IncidentListCreateView.as_view(), name='incident_list_create'),
+    path('incidents/<int:pk>/', IncidentDetailView.as_view(), name='incident_detail'),
 ]

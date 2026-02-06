@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import api from "../api";
-import { Calendar, MapPin, Users, Ticket as TicketIcon, Loader2, CheckCircle, Activity, Map as MapIcon } from "lucide-react";
+import { Calendar, MapPin, Users, Ticket as TicketIcon, Loader2, CheckCircle, Activity, Map as MapIcon, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import ReportIncidentModal from "./ReportIncidentModal";
 
 const EventCard = ({ event, onJoin }) => {
     const { user } = useAuth();
     const [joining, setJoining] = useState(false);
+    const [reportModalOpen, setReportModalOpen] = useState(false);
 
     const handleJoin = async () => {
         setJoining(true);
@@ -67,9 +69,18 @@ const EventCard = ({ event, onJoin }) => {
                 )}
 
                 {event.is_joined ? (
-                    <div className="flex items-center justify-center gap-2 w-full py-2 bg-green-500/10 text-green-400 rounded-lg border border-green-500/30 font-medium">
-                        <CheckCircle size={18} />
-                        Registered
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-center gap-2 w-full py-2 bg-green-500/10 text-green-400 rounded-lg border border-green-500/30 font-medium">
+                            <CheckCircle size={18} />
+                            Registered
+                        </div>
+                        <button
+                            onClick={() => setReportModalOpen(true)}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 rounded-lg border border-red-500/30 transition-colors font-medium"
+                        >
+                            <AlertCircle size={18} />
+                            Report Incident
+                        </button>
                     </div>
                 ) : (
                     <button
@@ -82,6 +93,12 @@ const EventCard = ({ event, onJoin }) => {
                     </button>
                 )}
             </div>
+
+            <ReportIncidentModal
+                isOpen={reportModalOpen}
+                onClose={() => setReportModalOpen(false)}
+                eventId={event.id}
+            />
         </div>
     );
 };

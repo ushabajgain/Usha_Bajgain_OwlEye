@@ -152,6 +152,16 @@ class Incident(models.Model):
     """
     Reported incidents during an event.
     """
+    class Category(models.TextChoices):
+        FIRE = 'FIRE', 'Fire'
+        MEDICAL = 'MEDICAL', 'Medical Emergency'
+        VIOLENCE = 'VIOLENCE', 'Violence/Conflict'
+        STAMPEDE = 'STAMPEDE', 'Stampede Risk'
+        SUSPICIOUS = 'SUSPICIOUS', 'Suspicious Activity'
+        LOST_PERSON = 'LOST_PERSON', 'Lost Person'
+        TECH_FAILURE = 'TECH_FAILURE', 'Technical/Infra Failure'
+        OTHER = 'OTHER', 'Other'
+
     class Severity(models.TextChoices):
         LOW = 'LOW', 'Low'
         MEDIUM = 'MEDIUM', 'Medium'
@@ -166,17 +176,25 @@ class Incident(models.Model):
 
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='incidents')
     reporter = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='reported_incidents')
-    title = models.CharField(max_length=255)
-    description = models.TextField()
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER)
+    description = models.TextField(blank=True, null=True)
     lat = models.FloatField()
     lng = models.FloatField()
     severity = models.CharField(max_length=10, choices=Severity.choices, default=Severity.MEDIUM)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.REPORTED)
+    assigned_volunteer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_incidents')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['event', 'severity']),
+            models.Index(fields=['event', 'status']),
+        ]
 
     def __str__(self):
-        return f"{self.title} ({self.severity})"
+        return f"{self.category} ({self.severity}) - {self.status}"
 
 class SOSAlert(models.Model):
     """

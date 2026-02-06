@@ -1,64 +1,33 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from rest_framework.validators import UniqueValidator
-from django.contrib.auth.password_validation import validate_password
-from .models import Event, Ticket
+from .models import Event, Ticket, Incident, SOSAlert
 
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the User model.
-    """
     class Meta:
         model = User
-        fields = ('id', 'email', 'username', 'full_name', 'phone_number', 'role', 'account_status')
-        read_only_fields = ('id', 'account_status')
-
+        fields = ['id', 'email', 'username', 'full_name', 'role', 'phone_number', 'account_status']
+        read_only_fields = ['id', 'email', 'role']
 
 class RegisterSerializer(serializers.ModelSerializer):
-    """
-    Serializer for user registration.
-    """
-    email = serializers.EmailField(
-        required=True,
-        validators=[UniqueValidator(queryset=User.objects.all())]
-    )
-    password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password]
-    )
-    confirm_password = serializers.CharField(write_only=True, required=True)
-
     class Meta:
         model = User
-        fields = ('email', 'username', 'full_name', 'password', 'confirm_password', 'role', 'phone_number')
-        extra_kwargs = {
-            'username': {'required': True},
-            'role': {'required': True}
-        }
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['confirm_password']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
-        return attrs
+        fields = ['id', 'email', 'username', 'password', 'full_name', 'role', 'phone_number']
+        extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        user = User.objects.create(
-            username=validated_data['username'],
+        user = User.objects.create_user(
             email=validated_data['email'],
+            username=validated_data['username'],
+            password=validated_data['password'],
             full_name=validated_data['full_name'],
             role=validated_data.get('role', 'ATTENDEE'),
             phone_number=validated_data.get('phone_number', '')
         )
-        user.set_password(validated_data['password'])
-        user.save()
         return user
 
-
 class EventSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Event creation and viewing.
-    """
     organizer_name = serializers.CharField(source='organizer.full_name', read_only=True)
     is_joined = serializers.SerializerMethodField()
 
@@ -74,20 +43,10 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'organizer', 'current_attendance', 'created_at', 'updated_at']
 
     def get_is_joined(self, obj):
-        user = self.context.get('request').user
-        if user and user.is_authenticated:
-            return Ticket.objects.filter(event=obj, user=user).exists()
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            return Ticket.objects.filter(event=obj, user=request.user).exists()
         return False
-
-    def validate(self, data):
-        """
-        Check that start_date is before end_date.
-        """
-        if data.get('start_date') and data.get('end_date'):
-            if data['start_date'] >= data['end_date']:
-                raise serializers.ValidationError({"end_date": "End date must be after start date."})
-        return data
-
 
 class TicketSerializer(serializers.ModelSerializer):
     """
@@ -108,11 +67,12 @@ class TicketSerializer(serializers.ModelSerializer):
 
 class IncidentSerializer(serializers.ModelSerializer):
     reporter_name = serializers.CharField(source='reporter.full_name', read_only=True)
+    assigned_volunteer_name = serializers.CharField(source='assigned_volunteer.full_name', read_only=True)
     
     class Meta:
         model = Incident
         fields = '__all__'
-        read_only_fields = ['id', 'reporter', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'reporter', 'created_at', 'updated_at', 'resolved_at']
 
 class SOSAlertSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.full_name', read_only=True)
@@ -133,4 +93,5 @@ class LiveMapEntitySerializer(serializers.Serializer):
     label = serializers.CharField(required=False)
     severity = serializers.CharField(required=False)
     status = serializers.CharField(required=False)
+    category = serializers.CharField(required=False)
     timestamp = serializers.DateTimeField()
