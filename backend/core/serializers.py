@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Event, Ticket, Incident, SOSAlert, CrowdLocation, SafetyAlert, ResponderLocation
+from .models import (
+    Event, Ticket, Incident, SOSAlert, CrowdLocation, 
+    SafetyAlert, ResponderLocation, IncidentLog, SOSLog
+)
 
 User = get_user_model()
 
@@ -62,22 +65,40 @@ class TicketSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'qr_token', 'status', 'scan_timestamp', 'created_at']
 
+class IncidentLogSerializer(serializers.ModelSerializer):
+    performed_by_name = serializers.CharField(source='performed_by.full_name', read_only=True)
+
+    class Meta:
+        model = IncidentLog
+        fields = '__all__'
+        read_only_fields = ['id', 'timestamp']
+
+class SOSLogSerializer(serializers.ModelSerializer):
+    performed_by_name = serializers.CharField(source='performed_by.full_name', read_only=True)
+
+    class Meta:
+        model = SOSLog
+        fields = '__all__'
+        read_only_fields = ['id', 'timestamp']
+
 class IncidentSerializer(serializers.ModelSerializer):
     reporter_name = serializers.CharField(source='reporter.full_name', read_only=True)
     assigned_volunteer_name = serializers.CharField(source='assigned_volunteer.full_name', read_only=True)
+    logs = IncidentLogSerializer(many=True, read_only=True)
     
     class Meta:
         model = Incident
         fields = '__all__'
-        read_only_fields = ['id', 'reporter', 'created_at', 'updated_at', 'resolved_at']
+        read_only_fields = ['id', 'reporter', 'created_at', 'updated_at', 'resolved_at', 'logs']
 
 class SOSAlertSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.full_name', read_only=True)
+    logs = SOSLogSerializer(many=True, read_only=True)
     
     class Meta:
         model = SOSAlert
         fields = '__all__'
-        read_only_fields = ['id', 'user', 'created_at', 'resolved_at']
+        read_only_fields = ['id', 'user', 'created_at', 'resolved_at', 'logs']
 
 class SafetyAlertSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)

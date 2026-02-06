@@ -196,6 +196,41 @@ class Incident(models.Model):
     def __str__(self):
         return f"{self.category} ({self.severity}) - {self.status}"
 
+class IncidentLog(models.Model):
+    """
+    Audit trail for transparency and historical analysis of an incident.
+    """
+    incident = models.ForeignKey(Incident, on_delete=models.CASCADE, related_name='logs')
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='action_logs')
+    action_type = models.CharField(max_length=50) # Reported, Verified, Assigned, Resolved, etc.
+    previous_status = models.CharField(max_length=20, null=True, blank=True)
+    new_status = models.CharField(max_length=20)
+    notes = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['incident', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.action_type} on {self.incident.id} at {self.timestamp}"
+
+class SOSLog(models.Model):
+    """
+    Audit trail for SOS alerts.
+    """
+    sos_alert = models.ForeignKey('SOSAlert', on_delete=models.CASCADE, related_name='logs')
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='sos_action_logs')
+    action_type = models.CharField(max_length=50) # Triggered, Acknowledged, Resolved
+    notes = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['sos_alert', 'timestamp']),
+        ]
+
 class SOSAlert(models.Model):
     """
     Emergency SOS alerts triggered by users.

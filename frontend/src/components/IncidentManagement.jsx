@@ -1,21 +1,25 @@
 import { useEffect, useState } from "react";
 import api from "../api";
 import { format } from "date-fns";
+import IncidentTimeline from "./IncidentTimeline";
 import {
     AlertTriangle,
     CheckCircle2,
     Clock,
     User,
     Info,
-    ChevronRight,
+    ChevronDown,
+    ChevronUp,
     Search,
-    Filter
+    Filter,
+    History
 } from "lucide-react";
 
 const IncidentManagement = ({ eventId }) => {
     const [incidents, setIncidents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ pending: 0, critical: 0 });
+    const [expandedIncident, setExpandedIncident] = useState(null);
 
     const fetchIncidents = async () => {
         try {
@@ -95,22 +99,39 @@ const IncidentManagement = ({ eventId }) => {
                         </div>
                     ) : (
                         incidents.map((incident) => (
-                            <div key={incident.id} className={`p-4 hover:bg-white/5 transition-colors ${incident.status === 'REPORTED' ? 'border-l-4 border-blue-500' : ''}`}>
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${getSeverityColor(incident.severity)}`}>
-                                            {incident.severity}
-                                        </span>
-                                        <h4 className="font-bold text-white">{incident.category.replace('_', ' ')}</h4>
+                            <div key={incident.id} className={`p-4 hover:bg-white/2 transition-colors ${incident.status === 'REPORTED' ? 'border-l-4 border-blue-500' : ''}`}>
+                                <div
+                                    className="cursor-pointer"
+                                    onClick={() => setExpandedIncident(expandedIncident === incident.id ? null : incident.id)}
+                                >
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${getSeverityColor(incident.severity)}`}>
+                                                {incident.severity}
+                                            </span>
+                                            <h4 className="font-bold text-white uppercase tracking-tighter">{incident.category.replace('_', ' ')}</h4>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-500">
+                                                {format(new Date(incident.created_at), "h:mm a")}
+                                            </span>
+                                            {expandedIncident === incident.id ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
+                                        </div>
                                     </div>
-                                    <span className="text-[10px] text-gray-500">
-                                        {format(new Date(incident.created_at), "h:mm a")}
-                                    </span>
+
+                                    <p className="text-sm text-gray-400 mb-4 line-clamp-2 italic">
+                                        "{incident.description || 'No additional details provided.'}"
+                                    </p>
                                 </div>
 
-                                <p className="text-sm text-gray-400 mb-4 line-clamp-2 italic">
-                                    "{incident.description || 'No additional details provided.'}"
-                                </p>
+                                {expandedIncident === incident.id && (
+                                    <div className="mb-4 p-4 bg-black/40 rounded-xl border border-gray-700/50 animate-in slide-in-from-top-2 duration-200">
+                                        <h5 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                            <History size={12} /> Response Audit Trail
+                                        </h5>
+                                        <IncidentTimeline logs={incident.logs} />
+                                    </div>
+                                )}
 
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -122,13 +143,13 @@ const IncidentManagement = ({ eventId }) => {
                                         {incident.status === 'REPORTED' && (
                                             <>
                                                 <button
-                                                    onClick={() => handleUpdateStatus(incident.id, 'FALSE_ALARM')}
+                                                    onClick={(e) => { e.stopPropagation(); handleUpdateStatus(incident.id, 'FALSE_ALARM'); }}
                                                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-bold rounded-lg transition-colors border border-gray-600"
                                                 >
                                                     False Alarm
                                                 </button>
                                                 <button
-                                                    onClick={() => handleUpdateStatus(incident.id, 'INVESTIGATING')}
+                                                    onClick={(e) => { e.stopPropagation(); handleUpdateStatus(incident.id, 'INVESTIGATING'); }}
                                                     className="px-3 py-1 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-500 text-xs font-bold rounded-lg transition-colors border border-yellow-500/30"
                                                 >
                                                     Investigate
@@ -137,7 +158,7 @@ const IncidentManagement = ({ eventId }) => {
                                         )}
                                         {incident.status === 'INVESTIGATING' && (
                                             <button
-                                                onClick={() => handleUpdateStatus(incident.id, 'RESOLVED')}
+                                                onClick={(e) => { e.stopPropagation(); handleUpdateStatus(incident.id, 'RESOLVED'); }}
                                                 className="px-3 py-1 bg-green-600/20 hover:bg-green-600/30 text-green-500 text-xs font-bold rounded-lg transition-colors border border-green-500/30"
                                             >
                                                 Mark Resolved

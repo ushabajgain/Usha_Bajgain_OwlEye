@@ -7,7 +7,10 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .models import Event, Ticket, Incident, SOSAlert, CrowdLocation
+from .models import (
+    Event, Ticket, Incident, SOSAlert, CrowdLocation, 
+    SafetyAlert, ResponderLocation, IncidentLog, SOSLog
+)
 from .serializers import (
     RegisterSerializer, UserSerializer, EventSerializer, 
     TicketSerializer, IncidentSerializer, SOSAlertSerializer,
@@ -259,6 +262,15 @@ class IncidentListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         incident = serializer.save(reporter=self.request.user)
         
+        # Initial Logging
+        IncidentLog.objects.create(
+            incident=incident,
+            performed_by=self.request.user,
+            action_type="REPORTED",
+            new_status=incident.status,
+            notes="Incident initially reported."
+        )
+
         # Real-time Broadcast
         channel_layer = get_channel_layer()
         
@@ -289,9 +301,22 @@ class IncidentDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, *args, **kwargs):
+        old_status = self.get_object().status
         res = super().patch(request, *args, **kwargs)
         incident = self.get_object()
-        
+        new_status = incident.status
+
+        # Create Log if status changed
+        if old_status != new_status:
+            IncidentLog.objects.create(
+                incident=incident,
+                performed_by=self.request.user,
+                action_type=f"STATUS_CHANGE_{new_status}",
+                previous_status=old_status,
+                new_status=new_status,
+                notes=request.data.get('notes', f"Status updated to {new_status}")
+            )
+
         # Broadcast status update to Live Map
         channel_layer = get_channel_layer()
         entity_data = {
@@ -332,6 +357,14 @@ class SOSAlertListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         sos = serializer.save(user=self.request.user)
         
+        # Log SOS Trigger
+        SOSLog.objects.create(
+            sos_alert=sos,
+            performed_by=self.request.user,
+            action_type="TRIGGERED",
+            notes=f"SOS alert triggered by {self.request.user.full_name}"
+        )
+
         # Real-time Broadcast to Live Map with CRITICAL priority
         channel_layer = get_channel_layer()
         entity_data = {
@@ -359,8 +392,19 @@ class SOSAlertDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, *args, **kwargs):
+        old_status = self.get_object().status
         res = super().patch(request, *args, **kwargs)
         sos = self.get_object()
+        new_status = sos.status
+
+        # Create Log if status changed
+        if old_status != new_status:
+            SOSLog.objects.create(
+                sos_alert=sos,
+                performed_by=self.request.user,
+                action_type=f"STATUS_CHANGE_{new_status}",
+                notes=request.data.get('notes', f"SOS Status updated to {new_status}")
+            )
         
         # Broadcast update
         channel_layer = get_channel_layer()
