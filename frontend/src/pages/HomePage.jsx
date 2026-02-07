@@ -4,7 +4,7 @@ import {
     Eye, Map, Bell, Users, Zap, 
     ArrowRight, CheckCircle, Globe, 
     Smartphone, Lock, Activity,
-    Heart, BarChart3, Radio
+    Heart, BarChart3, Radio, Shield
 } from 'lucide-react';
 import { getRole, isAuthenticated } from '../utils/auth';
 

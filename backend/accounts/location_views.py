@@ -54,7 +54,6 @@ def user_location_update(request):
         }
     """
     
-    # Check if using structured or legacy format
     if 'country_code' in request.data and 'location_id' in request.data:
         # Structured format
         serializer = LocationDataSerializer(data=request.data)
@@ -75,16 +74,12 @@ def user_location_update(request):
     location_data = serializer.validated_data
     
     try:
-        # Update user's location in database
-        # Note: This assumes User model has a location_data JSONField
         user = request.user
         
-        # Store location data
         user.location_data = location_data
         user.country_code = location_data.get('country_code')
         user.location_id = location_data.get('location_id')
         
-        # Update coordinates directly for backward compatibility
         user.latitude = location_data.get('lat')
         user.longitude = location_data.get('lng')
         user.location = location_data.get('display_name', '')
@@ -147,7 +142,6 @@ def user_location_retrieve(request):
     """
     user = request.user
     
-    # Check if user has structured location data
     if hasattr(user, 'location_data') and user.location_data:
         location = user.location_data
         return Response(
@@ -205,7 +199,6 @@ def user_location_delete(request):
     user = request.user
     
     try:
-        # Clear location fields
         user.location_data = None
         user.location = None
         user.latitude = None

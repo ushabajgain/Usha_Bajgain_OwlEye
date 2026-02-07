@@ -18,10 +18,20 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
     const ws = useRef(null);
 
     const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
     const [notificationPage, setNotificationPage] = useState(1);
     const [hasMoreNotifs, setHasMoreNotifs] = useState(false);
     const wsDisabledRef = useRef(false); // Track if WebSocket is disabled due to backend not supporting it
+
+    // ✅ Calculate unreadCount dynamically from actual data (single source of truth)
+    const calculateUnreadCount = () => {
+        const unreadNotifications = notifications.filter(n => !n.is_read).length;
+        const unreadSosAlerts = Object.values(sosAlerts).filter(s => 
+            !s.is_read && (s.status === 'reported' || s.status === 'assigned')
+        ).length;
+        return unreadNotifications + unreadSosAlerts;
+    };
+
+    const unreadCount = calculateUnreadCount();
 
     useEffect(() => {
         if (!eventId) {
@@ -118,7 +128,6 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                     const nData = notifyRes.value.data.results ? notifyRes.value.data.results : (notifyRes.value.data || []);
                     setNotifications(nData);
                     setHasMoreNotifs(!!notifyRes.value.data.next);
-                    setUnreadCount(nData.filter(n => !n.is_read).length);
                 }
 
             } catch (err) {
@@ -228,15 +237,15 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                         }
                         else if (data.entity_type === 'notification') {
                             setNotifications(prev => [data, ...prev]);
-                            setUnreadCount(prev => prev + 1);
+                            // ✅ unreadCount calculated dynamically - no need to update
                         }
                         else if (data.entity_type === 'notification_read') {
                             setNotifications(prev => prev.map(n => n.id === data.id ? { ...n, is_read: true } : n));
-                            setUnreadCount(prev => Math.max(0, prev - 1));
+                            // ✅ unreadCount calculated dynamically - no need to update
                         }
                         else if (data.entity_type === 'notification_read_all') {
                             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-                            setUnreadCount(0);
+                            // ✅ unreadCount calculated dynamically - no need to update
                         }
                         else if (data.entity_type === 'ticket') {
                             setTickets(prev => ({ ...prev, [data.id]: data }));
@@ -278,8 +287,51 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
         try {
             await api.patch(`/monitoring/notifications/${id}/`, { is_read: true });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            // ✅ unreadCount now calculated dynamically - no need to setUnreadCount
         } catch (err) { console.error("Mark read failed", err); }
+    };
+
+    const markSOSAsRead = async (sosId) => {
+        try {
+            await api.post(`/monitoring/sos/${sosId}/mark_read/`);
+            setSosAlerts(prev => {
+                const updated = { ...prev };
+                if (updated[sosId]) {
+                    updated[sosId] = { ...updated[sosId], is_read: true };
+                }
+                return updated;
+            });
+            // ✅ unreadCount now calculated dynamically - no need to setUnreadCount
+        } catch (err) { console.error("Mark SOS read failed", err); }
+    };
+
+    const markAllAsRead = async () => {
+        try {
+            // Mark all DB notifications as read
+            await api.post('/monitoring/notifications/mark_all_read/');
+            
+            // Mark all SOS alerts as read (for active/unread ones)
+            const sosToUpdate = Object.values(sosAlerts).filter(s => 
+                !s.is_read && (s.status === 'reported' || s.status === 'assigned')
+            );
+            
+            for (const s of sosToUpdate) {
+                try {
+                    await api.post(`/monitoring/sos/${s.id}/mark_read/`);
+                } catch (err) { console.error(`Failed to mark SOS ${s.id} as read:`, err); }
+            }
+            
+            // Update local state - mark all as read
+            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+            setSosAlerts(prev => {
+                const updated = {};
+                Object.entries(prev).forEach(([k, v]) => {
+                    updated[k] = { ...v, is_read: true };
+                });
+                return updated;
+            });
+            // ✅ unreadCount now calculated dynamically - will become 0 automatically
+        } catch (err) { console.error("Mark all as read failed", err); }
     };
 
     const loadMoreNotifications = async () => {
@@ -300,7 +352,7 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
         nearbySosAlerts, setNearbySosAlerts,  // ✅ STEP 5.3.4: Expose nearby SOS alerts
         locations, setLocations,
         safetyAlerts,
-        notifications, unreadCount, markAsRead, loadMoreNotifications, hasMoreNotifs,
+        notifications, unreadCount, markAsRead, markSOSAsRead, markAllAsRead, loadMoreNotifications, hasMoreNotifs,
         tickets, setTickets,
         events, setEvents,
         isConnected,

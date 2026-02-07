@@ -179,6 +179,7 @@ class SOSAlert(models.Model):
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='critical')
     assigned_volunteer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_sos')
     is_active = models.BooleanField(default=True)
+    is_read = models.BooleanField(default=False, help_text="Has the organizer/admin acknowledged this SOS alert")
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)  # NEW: Track completion time
     resolved_at = models.DateTimeField(null=True, blank=True)  # Legacy field

@@ -89,9 +89,9 @@ const IncidentControlCenter = () => {
                          <div style={{ display: 'flex', gap: 12 }}>
                             <div style={{ position: 'relative' }}>
                                 <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: TEXT_MID }} />
-                                <input placeholder="Search incidents..." style={{ padding: '10px 12px 10px 36px', borderRadius: 10, border: `1px solid ${BORDER}`, outline: 'none', width: 280 }} />
+                                <input id="incident-search" name="incident-search" placeholder="Search incidents..." style={{ padding: '10px 12px 10px 36px', borderRadius: 10, border: `1px solid ${BORDER}`, outline: 'none', width: 280 }} />
                             </div>
-                            <select value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: '0 12px', borderRadius: 10, border: `1px solid ${BORDER}`, background: '#fff' }}>
+                            <select id="severity-filter" name="severity-filter" value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: '0 12px', borderRadius: 10, border: `1px solid ${BORDER}`, background: '#fff' }}>
                                 <option value="all">All Severity</option>
                                 <option value="critical">Critical</option>
                                 <option value="high">High</option>

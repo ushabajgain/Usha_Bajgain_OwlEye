@@ -22,7 +22,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Remove the username field and keep only email and password
         if 'username' in self.fields:
             del self.fields['username']
     
@@ -39,7 +38,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise DRFValidationError({"detail": "Email and password are required."})
         
         try:
-            # Find user by email - case-insensitive lookup
             user = User.objects.get(email=email.lower())
             if not user.check_password(password):
                 raise DRFValidationError({"detail": "Invalid email or password."})
@@ -47,7 +45,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             if not user.is_active:
                 raise DRFValidationError({"detail": "This account is banned."})
             
-            # Generate tokens
             refresh = self.get_token(user)
             
             data = {

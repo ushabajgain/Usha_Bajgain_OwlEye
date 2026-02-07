@@ -5,10 +5,6 @@
  * in real application components.
  */
 
-// ============================================
-// Example 1: Automatic Tracking (Simplest)
-// ============================================
-
 import React from 'react';
 import { LocationTrackingProvider } from './LocationTrackingProvider';
 
@@ -23,10 +19,6 @@ export function AppWithAutoTracking() {
         </div>
     );
 }
-
-// ============================================
-// Example 2: With Status Display
-// ============================================
 
 import { LocationTrackingStatus } from './LocationTrackingProvider';
 
@@ -50,15 +42,8 @@ export function AppWithTrackingStatus() {
     );
 }
 
-// ============================================
-// Example 3: Direct Hook Usage
-// ============================================
-
 import { useLocationTracking } from '../hooks/useLocationTracking';
 
-/**
- * Use the hook directly for custom logic
- */
 export function LocationDisplay() {
     const { isTracking, lastLocation } = useLocationTracking(true);
 

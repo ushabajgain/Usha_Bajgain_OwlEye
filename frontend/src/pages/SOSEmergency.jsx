@@ -296,8 +296,8 @@ const SOSEmergency = () => {
                                 </h1>
                                 <p style={{ fontSize: 15, color: TEXT_MID, lineHeight: 1.7, marginBottom: 0 }}>
                                     {(status === 'locating' || status === 'loading')
-                                        ? "Establishing satellite lock and securing connection..." 
-                                        : "Tap the button to request immediate medical or security assistance. Your location will be shared automatically."}
+                                        ? "Connecting to emergency services..." 
+                                        : "Tap the button to request immediate assistance. Your location will be shared automatically."}
                                 </p>
                                 {error && (
                                     <div style={{ marginTop: 24, padding: '14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, color: DANGER, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>

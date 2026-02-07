@@ -19,13 +19,11 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
 
         setIsDownloading(true);
         try {
-            // Ensure all fonts are loaded - wait longer to be safe
             if (document.fonts && document.fonts.ready) {
                 await document.fonts.ready;
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
 
-            // Wait for all images to load
             const images = element.querySelectorAll('img');
             const imagePromises = Array.from(images).map(img => {
                 return new Promise((resolve) => {
@@ -39,10 +37,8 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
             });
             await Promise.all(imagePromises);
 
-            // Wait for SVGs (QR code) and all rendering to complete
             await new Promise(resolve => setTimeout(resolve, 1000));
 
-            // Get the actual element dimensions
             const width = element.offsetWidth;
             const height = element.offsetHeight;
 
@@ -59,16 +55,13 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
                 windowWidth: width,
                 foreignObjectRendering: true,
                 onclone: (clonedDocument) => {
-                    // Ensure all styles are properly applied to cloned element
                     const clonedElement = clonedDocument.getElementById('digital-ticket-container');
                     if (clonedElement) {
-                        // Ensure the element renders exactly as shown
                         clonedElement.style.margin = '0';
                         clonedElement.style.padding = '0';
                         clonedElement.style.position = 'relative';
                         clonedElement.style.display = 'flex';
                         
-                        // Ensure all child images have proper styling
                         const imgs = clonedElement.querySelectorAll('img');
                         imgs.forEach(img => {
                             img.style.margin = '0';
@@ -113,7 +106,6 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
         return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // Separator color
     const sep = 'rgba(17,14,58,0.08)';
     const labelColor = 'rgba(17,14,58,0.45)';
     const valueColor = '#110E3A';

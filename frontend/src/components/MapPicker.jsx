@@ -24,7 +24,6 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
     const [selectedAddress, setSelectedAddress] = useState('');
     const searchTimeout = useRef(null);
 
-    // Initialize map
     useEffect(() => {
         if (!mapRef.current || mapInstanceRef.current) return;
 
@@ -42,14 +41,11 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
             attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>',
         }).addTo(map);
 
-        // If location already exists, add marker
         if (location) {
             const marker = L.marker([location.lat, location.lng], { icon: DefaultIcon }).addTo(map);
             markerRef.current = marker;
-            // Reverse geocode the existing location
             reverseGeocode(location.lat, location.lng);
         } else {
-            // Strategy 1: Browser Geolocation
             const getGeo = (opts) => new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, opts));
 
             const attemptDetection = async () => {
@@ -91,7 +87,6 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
             attemptDetection();
         }
 
-        // On map click: place marker + reverse geocode
         map.on('click', (e) => {
             const { lat, lng } = e.latlng;
             placeMarker(map, lat, lng);
@@ -100,7 +95,6 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
 
         mapInstanceRef.current = map;
 
-        // Fix map sizing after modal animation
         setTimeout(() => {
             map.invalidateSize();
         }, 300);

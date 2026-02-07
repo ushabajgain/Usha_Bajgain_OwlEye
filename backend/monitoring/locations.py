@@ -25,8 +25,6 @@ from decimal import Decimal, InvalidOperation
 from typing import Dict, Optional, Tuple, Any
 import re
 
-# ISO 3166-1 alpha-2 country codes and names
-# This is the authoritative source for country identification
 ISO_COUNTRIES = {
     "NP": "Nepal",
     "IN": "India",
@@ -42,18 +40,14 @@ ISO_COUNTRIES = {
     "CN": "China",
     "BR": "Brazil",
     "ZA": "South Africa",
-    # Add more as needed
 }
 
 # Hierarchical location ID format: CC-STATE-WARD
-# Example: NP-KTM-05 (Nepal-Kathmandu-Ward5)
 LOCATION_ID_PATTERN = re.compile(r'^[A-Z]{2}(-[A-Z0-9]+)?(-[A-Z0-9]+)?$')
 
-# Geographic bounds
 LAT_MIN, LAT_MAX = -90.0, 90.0
 LNG_MIN, LNG_MAX = -180.0, 180.0
 
-# Coordinate precision: Always 9,6 (±0.111 meters)
 COORD_PRECISION = 6
 
 

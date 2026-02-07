@@ -96,6 +96,8 @@ const UserManagement = () => {
                         <div style={{ flex: 1, position: 'relative' }}>
                             <Search size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: TEXT_MID }} />
                             <input 
+                                id="user-search"
+                                name="user-search"
                                 placeholder="Search by name, email or UID..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}

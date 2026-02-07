@@ -107,7 +107,6 @@ const LocationTracker = () => {
                     const { latitude, longitude } = position.coords;
                     const now = Date.now();
 
-                    // Adaptive Tracking Constraints to Save Battery (~$1 to examiner)
                     if (lastPos) {
                         const dist = calcDistance(lastPos.lat, lastPos.lng, latitude, longitude);
                         const timeDiffMs = now - lastPos.timestamp; // True time distance
@@ -121,7 +120,7 @@ const LocationTracker = () => {
                         if ((now - lastNetworkSend) < requiredIntervalMs) return; // Retain burst safety throttle
                     }
 
-                    lastPos = { lat: latitude, lng: longitude, timestamp: now }; // Lock precise stamp closure
+                    lastPos = { lat: latitude, lng: longitude, timestamp: now };
                     lastNetworkSend = now;
 
                     const payload = {
@@ -135,7 +134,6 @@ const LocationTracker = () => {
                         battery: '100%'
                     };
 
-                    // Send Realtime via WebSockets or Queue for later if connection dropped
                     if (navigator.onLine && ws.current?.readyState === WebSocket.OPEN) {
                         ws.current.send(JSON.stringify(payload));
                     } else {
@@ -144,8 +142,6 @@ const LocationTracker = () => {
                         localStorage.setItem('offline_location_queue', JSON.stringify(queue.slice(-200))); // Persist last 200 points
                     }
 
-                    // REST API Update (Database sync & Reverse Geocoding)
-                    // Update on DB Every 60s
                     if (now - lastUpdate > 60000 && navigator.onLine) {
                         localStorage.setItem('last_user_lat', latitude.toString());
                         localStorage.setItem('last_user_lng', longitude.toString());
@@ -179,16 +175,13 @@ const LocationTracker = () => {
 
                 const geoOptions = { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 };
 
-                // 1. Get initial fast fix immediately to prevent empty map wait time
                 navigator.geolocation.getCurrentPosition(
                     (p) => {
                         handlePosition(p);
-                        // 2. Start continuous live watch now that we have satellite lock
                         watchId.current = navigator.geolocation.watchPosition(handlePosition, handleError, geoOptions);
                     },
                     (err) => {
                         handleError(err);
-                        // Even if initial fast fix fails, start watchPosition in background in case satellites lock later
                         watchId.current = navigator.geolocation.watchPosition(handlePosition, handleError, geoOptions);
                     },
                     geoOptions

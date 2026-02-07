@@ -98,6 +98,8 @@ const VolunteerManagement = () => {
                             <div style={{ position: 'relative' }}>
                                 <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: TEXT_MID }} />
                                 <input 
+                                    id="volunteer-search"
+                                    name="volunteer-search"
                                     placeholder="Search volunteers..." 
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}

@@ -226,24 +226,24 @@ const TicketBooking = () => {
                                             <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                                                 <div>
                                                     <label style={s.label}>First Name *</label>
-                                                    <input required type="text" style={s.input} value={billingInfo.first_name} onChange={e => setBillingInfo({ ...billingInfo, first_name: e.target.value })} placeholder="John" />
+                                                    <input id="billing-first-name" name="first_name" required type="text" style={s.input} value={billingInfo.first_name} onChange={e => setBillingInfo({ ...billingInfo, first_name: e.target.value })} placeholder="John" />
                                                 </div>
                                                 <div>
                                                     <label style={s.label}>Last Name *</label>
-                                                    <input required type="text" style={s.input} value={billingInfo.last_name} onChange={e => setBillingInfo({ ...billingInfo, last_name: e.target.value })} placeholder="Doe" />
+                                                    <input id="billing-last-name" name="last_name" required type="text" style={s.input} value={billingInfo.last_name} onChange={e => setBillingInfo({ ...billingInfo, last_name: e.target.value })} placeholder="Doe" />
                                                 </div>
                                                 <div style={{ gridColumn: '1 / -1' }}>
                                                     <label style={s.label}>Email Address *</label>
                                                     <div style={{ position: 'relative' }}>
                                                         <Mail size={16} color={C.textSecondary} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-                                                        <input required type="email" style={{ ...s.input, paddingLeft: 40 }} value={billingInfo.email} onChange={e => setBillingInfo({ ...billingInfo, email: e.target.value })} placeholder="john.doe@example.com" />
+                                                        <input id="billing-email" name="email" required type="email" style={{ ...s.input, paddingLeft: 40 }} value={billingInfo.email} onChange={e => setBillingInfo({ ...billingInfo, email: e.target.value })} placeholder="john.doe@example.com" />
                                                     </div>
                                                 </div>
                                                 <div style={{ gridColumn: '1 / -1' }}>
                                                     <label style={s.label}>Confirm Email *</label>
                                                     <div style={{ position: 'relative' }}>
                                                         <Mail size={16} color={C.textSecondary} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-                                                        <input required type="email" style={{ ...s.input, paddingLeft: 40 }} value={billingInfo.confirm_email} onChange={e => setBillingInfo({ ...billingInfo, confirm_email: e.target.value })} placeholder="Confirm your email" />
+                                                        <input id="billing-confirm-email" name="confirm_email" required type="email" style={{ ...s.input, paddingLeft: 40 }} value={billingInfo.confirm_email} onChange={e => setBillingInfo({ ...billingInfo, confirm_email: e.target.value })} placeholder="Confirm your email" />
                                                     </div>
                                                 </div>
                                             </div>

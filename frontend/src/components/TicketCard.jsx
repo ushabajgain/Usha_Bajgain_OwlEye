@@ -19,7 +19,6 @@ const TicketCard = ({ ticket }) => {
         return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // Separator color
     const sep = 'rgba(17,14,58,0.08)';
     const labelColor = 'rgba(17,14,58,0.45)';
     const valueColor = '#110E3A';

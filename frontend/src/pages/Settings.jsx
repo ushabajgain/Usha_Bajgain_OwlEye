@@ -265,16 +265,16 @@ const Settings = () => {
                                         <div>
                                             <div style={s.field}>
                                                 <label style={s.label}>Full Name</label>
-                                                <input style={s.input} value={profile.fullName} onChange={e => setProfile({ ...profile, fullName: e.target.value })} placeholder="Full Name" required />
+                                                <input id="profile-fullname" name="fullName" style={s.input} value={profile.fullName} onChange={e => setProfile({ ...profile, fullName: e.target.value })} placeholder="Full Name" required />
                                             </div>
                                             <div style={s.field}>
                                                 <label style={s.label}>Email Address</label>
-                                                <input style={{ ...s.input, ...s.inputDisabled }} value={profile.email} readOnly />
+                                                <input id="profile-email" name="email" style={{ ...s.input, ...s.inputDisabled }} value={profile.email} readOnly />
                                                 <button type="button" style={{ color: C.primary, fontSize: 12, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>Change Email Address</button>
                                             </div>
                                             <div style={s.field}>
                                                 <label style={s.label}>Phone Number</label>
-                                                <input style={s.input} value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} placeholder="Phone Number" />
+                                                <input id="profile-phone" name="phone" style={s.input} value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} placeholder="Phone Number" />
                                             </div>
                                             <div style={s.field}>
                                                 <label style={s.label}>Location</label>

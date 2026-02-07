@@ -27,7 +27,6 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
     const notifRef = useRef(null);
     const [notifications, setNotifications] = useState([]);
 
-    // Close when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (notifRef.current && !notifRef.current.contains(event.target)) {

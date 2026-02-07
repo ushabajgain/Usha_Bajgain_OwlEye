@@ -6,7 +6,6 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, LifeBuoy, Shield, Crosshair, MapPin } from 'lucide-react';
 import api from '../utils/api';
 
-// --- STABLE ICON SYSTEM (Internalized to avoid top-level crashes) ---
 const createTacticalIcon = (color, isSOS = false) => {
     try {
         return L.divIcon({
@@ -28,7 +27,6 @@ const createTacticalIcon = (color, isSOS = false) => {
 
 import 'leaflet.heat';
 
-// --- HEATMAP OVERLAY COMPONENT ---
 const TacticalHeatOverlay = ({ intensity, points }) => {
     const map = useMap();
     const layerRef = useRef(null);
@@ -56,7 +54,6 @@ const TacticalMapLayer = ({ eventId }) => {
     const ws = useRef(null);
     const [mapError, setMapError] = useState(null);
 
-    // Bootstrap Leaflet icons safely
     useEffect(() => {
         try {
             if (L.Icon.Default && L.Icon.Default.prototype) {
@@ -72,7 +69,6 @@ const TacticalMapLayer = ({ eventId }) => {
         }
     }, []);
 
-    // Initial Entity Fetch
     useEffect(() => {
         const fetchEntities = async () => {
             try {
