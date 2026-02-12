@@ -11,7 +11,7 @@ import { getFullName, getRole, getProfileImage } from '../utils/auth';
 /**
  * PageHeader — reusable top navbar for all pages.
  */
-const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/dashboard', actions }) => {
+const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/dashboard', actions, notificationBadge = 0 }) => {
     const navigate = useNavigate();
     const fullName = getFullName() || 'User';
     const userRole = getRole() || 'Admin';
@@ -207,7 +207,7 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
         }
     };
 
-    const hasNewNotifs = notifications.length > 0;
+    const hasNewNotifs = notificationBadge > 0;
 
     return (
         <header style={s.header}>
@@ -234,7 +234,25 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
                         onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                     >
                         <Bell size={18} color="#fff" />
-                        {hasNewNotifs && <div style={s.badge} />}
+                        {hasNewNotifs && (
+                            <div style={{
+                                ...s.badge,
+                                width: notificationBadge > 9 ? 18 : 16,
+                                height: notificationBadge > 9 ? 18 : 16,
+                                minWidth: notificationBadge > 9 ? 18 : 16,
+                                borderRadius: notificationBadge > 9 ? 8 : '50%',
+                                fontSize: notificationBadge > 9 ? 9 : 10,
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#fff',
+                                border: '1.5px solid #F8FAFC',
+                                padding: notificationBadge > 9 ? '2px 4px' : 0
+                            }}>
+                                {notificationBadge > 9 ? '9+' : notificationBadge}
+                            </div>
+                        )}
                     </button>
 
                     {showNotif && (
