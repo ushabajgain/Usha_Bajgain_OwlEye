@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import { usePagination, Pagination } from '../components/Pagination';
 import { 
     Globe, Search, Filter, MoreHorizontal, 
     CheckCircle, XCircle, AlertTriangle, Eye,
@@ -21,6 +22,7 @@ const EventManagement = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         fetchEvents();
@@ -58,12 +60,21 @@ const EventManagement = () => {
         }
     };
 
-    const filtered = events.filter(e => {
-        const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || 
-                              e.organizer_name?.toLowerCase().includes(search.toLowerCase());
-        const matchesFilter = filter === 'all' || e.status === filter;
-        return matchesSearch && matchesFilter;
-    });
+    const filtered = useMemo(() => {
+        return events.filter(e => {
+            const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || 
+                                  e.organizer_name?.toLowerCase().includes(search.toLowerCase());
+            const matchesFilter = filter === 'all' || e.status === filter;
+            return matchesSearch && matchesFilter;
+        });
+    }, [events, search, filter]);
+
+    const { page, setPage, slicedItems: paginatedEvents } = usePagination(filtered, itemsPerPage);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [search, filter, setPage]);
 
     const s = {
         container: { display: 'flex', minHeight: '100vh', background: CONTENT_BG },
@@ -121,7 +132,7 @@ const EventManagement = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filtered.map(e => (
+                                    {paginatedEvents.map(e => (
                                         <tr key={e.id}>
                                             <td style={s.td}>
                                                 <div style={{ fontWeight: 700 }}>{e.name}</div>
@@ -154,6 +165,12 @@ const EventManagement = () => {
                             </table>
                         )}
                     </div>
+                    <Pagination 
+                        page={page}
+                        totalItems={filtered.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPage}
+                    />
                 </div>
             </main>
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>

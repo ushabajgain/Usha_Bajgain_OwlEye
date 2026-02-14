@@ -266,22 +266,26 @@ def send_notification(user, title, message, notification_type, event=None, prior
         channel_layer = get_channel_layer()
         if channel_layer:
             group = f"user_{user.id}"
-            async_to_sync(channel_layer.group_send)(
-                group,
-                {
-                    'type': 'entity_broadcast',
-                    'entity_type': 'notification',
-                    'id': notif.id,
-                    'title': notif.title,
-                    'message': notif.message,
-                    'notification_type': notif.notification_type,
-                    'priority': notif.priority,
-                    'src_type': notif.entity_type,
-                    'src_id': notif.entity_id,
-                    'created_at': notif.created_at.strftime("%I:%M %p"),
-                    'is_read': notif.is_read
-                }
-            )
+            
+            # ✅ CRITICAL FIX: Include full metadata (user_name, sender info, etc.)
+            broadcast_payload = {
+                'type': 'entity_broadcast',
+                'entity_type': 'notification',
+                'id': notif.id,
+                'title': notif.title,
+                'message': notif.message,
+                'notification_type': notif.notification_type,
+                'priority': notif.priority,
+                'src_type': notif.entity_type,
+                'src_id': notif.entity_id,
+                'created_at': notif.created_at.strftime("%I:%M %p"),
+                'is_read': notif.is_read,
+                'user_id': user.id,
+                'user_name': user.full_name or user.username,  # ✅ Include sender name
+            }
+            
+            async_to_sync(channel_layer.group_send)(group, broadcast_payload)
+            
             # Reliable messaging delivery stamp
             notif.delivered_at = timezone.now()
             notif.save(update_fields=['delivered_at'])

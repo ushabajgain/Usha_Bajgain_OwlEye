@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import { usePagination, Pagination } from '../components/Pagination';
 import { Bell, AlertTriangle, Clock, MapPin, User, ChevronRight, Loader2, Siren, Navigation, ShieldCheck, Activity, Search } from 'lucide-react';
 import { getRole } from '../utils/auth';
 
@@ -115,6 +116,7 @@ const SOSAlertsList = () => {
 
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, active
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         const fetchAlerts = async () => {
@@ -142,6 +144,13 @@ const SOSAlertsList = () => {
         const matchesStatus = filterStatus === 'all' || a.status === 'active';
         return matchesSearch && matchesStatus;
     });
+
+    const { page, setPage, slicedItems: paginatedAlerts } = usePagination(filtered, itemsPerPage);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [search, filterStatus, setPage]);
 
     const s = {
         container: { display: 'flex', minHeight: '100vh', background: CONTENT_BG },
@@ -226,7 +235,7 @@ const SOSAlertsList = () => {
                             <p style={{ color: TEXT_MID }}>Adjust your search or filter to see more.</p>
                         </div>
                     ) : (
-                        filtered.map(alert => (
+                        paginatedAlerts.map(alert => (
                             <div key={alert.id} style={s.card(alert.status)}>
                                 <div style={s.pulseIcon}>
                                     <Bell size={24} className={alert.status === 'active' ? 'animate-pulse' : ''} />
@@ -337,6 +346,14 @@ const SOSAlertsList = () => {
                                 </div>
                             </div>
                         ))
+                    )}
+                    {filtered.length > 0 && (
+                        <Pagination 
+                            page={page}
+                            totalItems={filtered.length}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={setPage}
+                        />
                     )}
                 </div>
             </main>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
@@ -6,6 +6,7 @@ import { Search, Calendar, AlertTriangle, Eye, Shield, History } from 'lucide-re
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
 import { getRole, getToken } from '../utils/auth';
+import { usePagination, Pagination } from '../components/Pagination';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -26,6 +27,7 @@ const IncidentHistory = () => {
     const [incidents, setIncidents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState({ status: '', priority: '', search: '' });
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         const userRole = getRole();
@@ -54,6 +56,13 @@ const IncidentHistory = () => {
             : true;
         return matchesStatus && matchesPriority && matchesSearch;
     });
+
+    const { page, setPage, slicedItems: paginatedIncidents } = usePagination(filteredIncidents, itemsPerPage);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [filter, setPage]);
 
     const s = {
         shell: { display: 'flex', minHeight: '100vh', fontFamily: "'Inter','Segoe UI',sans-serif" },
@@ -126,7 +135,7 @@ const IncidentHistory = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredIncidents.map(inc => (
+                                    {paginatedIncidents.map(inc => (
                                         <tr key={inc.id}
                                             onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                                             onMouseLeave={e => e.currentTarget.style.background = ''}>
@@ -163,6 +172,12 @@ const IncidentHistory = () => {
                             </table>
                         )}
                     </div>
+                    <Pagination 
+                        page={page}
+                        totalItems={filteredIncidents.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPage}
+                    />
                 </div>
             </main>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import { usePagination, Pagination } from '../components/Pagination';
 import { 
     Users, Search, Filter, MoreVertical, 
     Shield, UserCheck, UserX, Mail, Loader2 
@@ -19,6 +20,7 @@ const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -65,6 +67,17 @@ const UserManagement = () => {
             alert("Failed to change user role.");
         }
     };
+
+    const filtered = useMemo(() => {
+        return users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()));
+    }, [users, search]);
+
+    const { page, setPage, slicedItems: paginatedUsers } = usePagination(filtered, itemsPerPage);
+
+    // Reset to first page when search changes
+    useEffect(() => {
+        setPage(1);
+    }, [search, setPage]);
 
     const s = {
         container: { display: 'flex', minHeight: '100vh', background: CONTENT_BG },
@@ -114,7 +127,7 @@ const UserManagement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())).map(u => (
+                                {paginatedUsers.map(u => (
                                     <tr key={u.id}>
                                         <td style={s.td}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -147,6 +160,12 @@ const UserManagement = () => {
                             </tbody>
                         </table>
                     </div>
+                    <Pagination 
+                        page={page}
+                        totalItems={filtered.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPage}
+                    />
                 </div>
             </main>
         </div>

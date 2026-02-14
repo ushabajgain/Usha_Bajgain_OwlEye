@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
 import { getRole } from '../utils/auth';
+import { usePagination, Pagination } from '../components/Pagination';
 import { 
     AlertTriangle, ShieldAlert, Clock, MapPin, 
     User, Loader2, CheckCircle, ArrowRight, Search
@@ -22,6 +23,8 @@ const IncidentControlCenter = () => {
     const [incidents, setIncidents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         const userRole = getRole();
@@ -60,6 +63,22 @@ const IncidentControlCenter = () => {
         }
     };
 
+    const filtered = useMemo(() => {
+        return incidents.filter(i => {
+            const matchesSeverity = filter === 'all' || i.priority === filter;
+            const matchesSearch = i.title.toLowerCase().includes(search.toLowerCase()) || 
+                                  i.description?.toLowerCase().includes(search.toLowerCase());
+            return matchesSeverity && matchesSearch;
+        });
+    }, [incidents, filter, search]);
+
+    const { page, setPage, slicedItems: paginatedIncidents } = usePagination(filtered, itemsPerPage);
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [filter, search, setPage]);
+
     const handleDetails = (id) => {
         navigate(`/organizer/incident/${id}`);
     };
@@ -89,7 +108,7 @@ const IncidentControlCenter = () => {
                          <div style={{ display: 'flex', gap: 12 }}>
                             <div style={{ position: 'relative' }}>
                                 <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: TEXT_MID }} />
-                                <input id="incident-search" name="incident-search" placeholder="Search incidents..." style={{ padding: '10px 12px 10px 36px', borderRadius: 10, border: `1px solid ${BORDER}`, outline: 'none', width: 280 }} />
+                                <input id="incident-search" name="incident-search" placeholder="Search incidents..." value={search} onChange={e => setSearch(e.target.value)} style={{ padding: '10px 12px 10px 36px', borderRadius: 10, border: `1px solid ${BORDER}`, outline: 'none', width: 280 }} />
                             </div>
                             <select id="severity-filter" name="severity-filter" value={filter} onChange={e => setFilter(e.target.value)} style={{ padding: '0 12px', borderRadius: 10, border: `1px solid ${BORDER}`, background: '#fff' }}>
                                 <option value="all">All Severity</option>
@@ -111,7 +130,7 @@ const IncidentControlCenter = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {incidents.map(i => (
+                                    {paginatedIncidents.map(i => (
                                         <tr key={i.id}>
                                             <td style={s.td}>
                                                 <div style={{ fontWeight: 700 }}>{i.title}</div>
@@ -145,6 +164,12 @@ const IncidentControlCenter = () => {
                             </table>
                         )}
                     </div>
+                    <Pagination 
+                        page={page}
+                        totalItems={filtered.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPage}
+                    />
                 </div>
             </main>
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>

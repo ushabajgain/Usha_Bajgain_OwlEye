@@ -1,12 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     Bell, Settings, Search, Megaphone,
     FileText, LayoutDashboard, BookOpen,
-    MoreHorizontal
+    MoreHorizontal, AlertCircle, CheckCircle, Info, AlertTriangle
 } from 'lucide-react';
 import C from '../utils/colors';
-import { getFullName, getRole, getProfileImage } from '../utils/auth';
+import { getFullName, getRole, getProfileImage, getUserId } from '../utils/auth';
+import { useSafety } from '../context/SafetySocketContext';
+import { getDisplayNotifications, getIntentStyle, deduplicateNotifications } from '../utils/notificationHelper';
 
 /**
  * PageHeader — reusable top navbar for all pages.
@@ -25,7 +27,39 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
 
     const [showNotif, setShowNotif] = useState(false);
     const notifRef = useRef(null);
-    const [notifications, setNotifications] = useState([]);
+    const { displayNotifications, markAsRead, markSOSAsRead } = useSafety();
+
+    // ✅ FIX: Use displayNotifications from context (single source of truth)
+    // Context already runs the pipeline once, just take the latest 5
+    const headerNotifications = useMemo(() => {
+        return (displayNotifications || []).slice(0, 5); // Only show latest 5
+    }, [displayNotifications]);
+
+    const handleNotificationClick = async (n) => {
+        setShowNotif(false);
+
+        // Mark as read (don't await for instant navigation)
+        if (n.type === 'sos') {
+            markSOSAsRead(n.dbId);
+        } else {
+            markAsRead(n.dbId);
+        }
+
+        // Navigate based on type and role
+        if (n.type === 'sos') {
+            if (userRole === 'attendee') {
+                navigate('/attendee/sos');
+            } else if (userRole === 'volunteer') {
+                navigate('/volunteer/sos');
+            } else if (userRole === 'organizer') {
+                navigate(`/organizer/sos?id=${n.dbId}`);
+            } else {
+                navigate('/admin/sos');
+            }
+        } else {
+            navigate('/notifications');
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -35,21 +69,6 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    // Placeholder for real notification fetching
-    useEffect(() => {
-        const fetchNotifications = async () => {
-            try {
-                // In a real scenario, we would call our API here
-                // const res = await api.get('/monitoring/alerts/');
-                // setNotifications(res.data);
-                setNotifications([]); // Starting empty as requested (no mockup)
-            } catch (err) {
-                console.error("Failed to fetch notifications", err);
-            }
-        };
-        fetchNotifications();
     }, []);
 
 
@@ -259,13 +278,34 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
                         <div style={s.notifPop}>
                             <div style={s.notifHeader}>Recent Notifications</div>
                             <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                                {notifications.length > 0 ? (
-                                    notifications.map(n => (
-                                        <div key={n.id} style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
-                                            <p style={{ fontSize: 12, margin: 0, fontWeight: 600 }}>{n.title}</p>
-                                            <p style={{ fontSize: 11, margin: '4px 0 0', color: C.textSecondary }}>{n.message}</p>
-                                        </div>
-                                    ))
+                                {headerNotifications.length > 0 ? (
+                                    headerNotifications.map(n => {
+                                        const intentStyle = getIntentStyle(n.intent);
+                                        return (
+                                            <div
+                                                key={n.compositeId || `${n.type}-${n.id}`}
+                                                style={{
+                                                    padding: '12px 16px',
+                                                    borderBottom: `1px solid ${C.border}`,
+                                                    cursor: 'pointer',
+                                                    background: !n.is_read ? intentStyle.backgroundColor : '#fff',
+                                                    transition: 'background 0.15s ease',
+                                                    borderLeft: `3px solid ${intentStyle.borderColor}`
+                                                }}
+                                                onClick={() => handleNotificationClick(n)}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    {n.type === 'sos' && <AlertCircle size={14} color={intentStyle.titleColor} />}
+                                                    {n.type === 'notification' && n.notification_type === 'incident' && <AlertTriangle size={14} color={intentStyle.titleColor} />}
+                                                    {n.type === 'notification' && n.notification_type === 'system' && <CheckCircle size={14} color={intentStyle.titleColor} />}
+                                                    {n.type === 'notification' && (!n.notification_type || n.notification_type === 'broadcast') && <Info size={14} color={intentStyle.titleColor} />}
+                                                    <p style={{ fontSize: 12, margin: 0, fontWeight: 600, flex: 1, color: intentStyle.titleColor }}>{n.displayTitle || n.title}</p>
+                                                    {!n.is_read && <div style={{ width: 6, height: 6, borderRadius: '50%', background: intentStyle.dotColor }} />}
+                                                </div>
+                                                <p style={{ fontSize: 11, margin: '4px 0 0', color: C.textSecondary }}>{n.displayMessage || n.message}</p>
+                                            </div>
+                                        );
+                                    })
                                 ) : (
                                     <div style={s.notifEmpty}>
                                         <Bell size={24} style={{ opacity: 0.2, marginBottom: 8 }} />

@@ -46,7 +46,7 @@ const VolunteerDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [acceptingSOSId, setAcceptingSOSId] = useState(null); // ✅ Track which SOS is accepting
     const [sosError, setSosError] = useState(null); // ✅ Track SOS errors
-    const { incidents, nearbySosAlerts, locations = {}, loading: contextLoading } = useSafety();
+    const { incidents, nearbySosAlerts, locations = {}, loading: contextLoading, unreadCount } = useSafety();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -132,7 +132,7 @@ const VolunteerDashboard = () => {
         <div style={s.container}>
             <Sidebar />
             <main style={s.main}>
-                <PageHeader title="Volunteer Dashboard" breadcrumb="Home" />
+                <PageHeader title="Volunteer Dashboard" breadcrumb="Home" notificationBadge={unreadCount} />
 
                 {loading ? (
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 32px' }}>

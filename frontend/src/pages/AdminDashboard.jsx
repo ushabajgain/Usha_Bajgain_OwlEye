@@ -39,7 +39,7 @@ const sosIcon = L.divIcon({
     iconSize: [14, 14]
 });
 
-import { useSafetySocket } from '../hooks/useSafetySocket';
+import { useSafety } from '../context/SafetySocketContext';
 
 const HeatmapLayer = ({ points }) => {
     const map = useMap();
@@ -59,7 +59,7 @@ const HeatmapLayer = ({ points }) => {
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const [targetEventId, setTargetEventId] = useState('1');
-    const { incidents, sosAlerts: realTimeSos, locations, isConnected, loading: socketLoading } = useSafetySocket(targetEventId);
+    const { incidents, sosAlerts: realTimeSos, locations, isConnected, loading: socketLoading, unreadCount } = useSafety();
 
     const [stats, setStats] = useState({
         total_users: 0,
@@ -157,7 +157,7 @@ const AdminDashboard = () => {
         <div style={s.container}>
             <Sidebar />
             <main style={s.main}>
-                <PageHeader title="Safety Operation Center" />
+                <PageHeader title="Safety Operation Center" notificationBadge={unreadCount} />
 
                 {loading && (
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 32px' }}>

@@ -388,6 +388,9 @@ class IncidentViewSet(viewsets.ModelViewSet):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         
+        # ✅ NEW: Notify reporter their incident was created
+        send_notification(reporter, "Incident Reported", f"Your incident '{incident.title}' has been reported and is being reviewed.", 'incident', incident.event)
+        
         staff = User.objects.filter(role__in=['organizer', 'admin'])
         for s in staff:
             send_notification(s, f"New Incident: {incident.title}", f"Reported at {incident.location_name}.", 'incident', incident.event)
@@ -821,6 +824,12 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"[WARN] log_sos_created failed: {e}")
 
+            # ✅ NEW: Notify attendee their SOS was sent
+            try:
+                send_notification(user, "SOS Sent", "Your emergency alert has been sent. Help is on the way.", 'sos', sos.event)
+            except Exception as e:
+                print(f"[WARN] Attendee SOS notification failed: {e}")
+
             # Notify staff about the SOS
             try:
                 from django.contrib.auth import get_user_model
@@ -834,14 +843,27 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             # Notify nearby volunteers (don't assign, just alert them to accept)
             if nearby_volunteers:
                 try:
+                    # ✅ ASSIGN TO NEAREST VOLUNTEER
+                    nearest_volunteer, nearest_distance = nearby_volunteers[0]
+                    
+                    # Update SOS with assignment
+                    sos.assigned_volunteer = nearest_volunteer
+                    sos.save(update_fields=['assigned_volunteer'])
+                    
+                    distance_text = f"{nearest_distance:.2f}km away" if nearest_distance else "in your area"
+                    
                     for volunteer, distance in nearby_volunteers:
-                        distance_text = f"{distance:.2f}km away" if distance else "in your area"
+                        distance_text_vol = f"{distance:.2f}km away" if distance else "in your area"
+                        
+                        # ✅ FIX: Include full metadata so UI doesn't show "unknown"
                         send_notification(
                             volunteer,
-                            "Emergency SOS Alert Nearby!",
-                            f"SOS from {user.full_name} at {location_name} ({distance_text}). Tap to respond.",
+                            f"SOS Alert: {user.full_name}",  # Include attendee name!
+                            f"SOS from {user.full_name} at {location_name} ({distance_text_vol}). Tap to respond.",
                             'assignment',
-                            sos.event
+                            sos.event,
+                            entity_type='sos_assignment',
+                            entity_id=sos.id
                         )
                 except Exception as e:
                     print(f"[WARN] Volunteer notification failed: {e}")

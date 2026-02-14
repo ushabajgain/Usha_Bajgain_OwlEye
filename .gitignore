@@ -1,4 +1,6 @@
+# ==========================================
 # OS & System Files
+# ==========================================
 .DS_Store
 .DS_Store?
 ._*
@@ -12,7 +14,9 @@ Thumbs.db
 .AppleDouble
 .LSOverride
 
-# Python
+# ==========================================
+# Python & Django
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,6 +24,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg
+*.egg-info/
+dist/
+build/
 
 # Virtual Environments
 env/
@@ -28,25 +36,11 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-build/
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-pip-log.txt
-pip-delete-this-directory.txt
+.env
+.env.local
+.env.*.local
 
-# Django
+# Django specific
 *.log
 local_settings.py
 /media/
@@ -57,8 +51,11 @@ db.sqlite3
 /backend/media/
 /backend/staticfiles/
 /backend/static/
+/backend/local_settings.py
 
-# Node / Frontend
+# ==========================================
+# Node.js & Frontend (Vite/React)
+# ==========================================
 node_modules/
 /frontend/node_modules/
 /frontend/dist/
@@ -66,87 +63,114 @@ node_modules/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# NPM/Yarn/PNPM logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.npm
+lerna-debug.log*
 .pnpm-debug.log*
 
-# Environment
-.env
-.env.local
-.env.*.local
-.env.production
-.env.development
-.env.test
-
-# Build Outputs
-dist/
+# Vite
+.vite/
 dist-ssr/
-build/
-.next/
-out/
-*.tar.gz
 
-# Cache
+# ==========================================
+# Build & Cache
+# ==========================================
 .cache/
 .parcel-cache/
 .eslintcache
-.vite/
 .turbo/
-.pytest_cache/
+.ruff_cache/
 .mypy_cache/
 .dmypy.json
 dmypy.json
 .pyre/
-.ruff_cache/
 
+# ==========================================
 # Testing
+# ==========================================
+.pytest_cache/
+.coverage
+.coverage.*
 coverage/
 htmlcov/
 .nyc_output/
 test-results/
 blob-report/
 playwright-report/
-.coverage
-.coverage.*
 
-# IDEs
+# ==========================================
+# IDEs & Editors
+# ==========================================
 .vscode/
 !.vscode/extensions.json
 .idea/
 .project
 .pydevproject
 .settings/
+.sublime-project
+.sublime-workspace
 *.iml
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-.sublimeproject
-.sublimeworkspace
 *.code-workspace
+.DS_Store.AppleDouble
+.LSOverride
 
+# ==========================================
 # Lock Files
-.lock
+# ==========================================
 *.lock
 *.lockb
 
+# ==========================================
 # Database
+# ==========================================
 *.db
 *.sqlite
 *.sqlite3
+*.sql
 
-# Temporary
+# ==========================================
+# Temporary & Backup Files
+# ==========================================
 .tmp/
 tmp/
 temp/
 *.tmp
 *.bak
 *.backup
-*.sublime-project
-*.sublime-workspace
-
-# Misc
+.DS_Store
 Full Project/
-*.log
+
+# ==========================================
+# OS Specific
+# ==========================================
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+.directory
+
+# ==========================================
+# Project Specific
+# ==========================================
+/.venv
+/venv
+*.pem
+*.key
+*.crt
+.env.*
+!.env.example
+secrets.json
+

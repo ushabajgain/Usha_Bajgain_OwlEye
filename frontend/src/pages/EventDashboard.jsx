@@ -103,7 +103,7 @@ const EventDashboard = () => {
     });
     const [lastUpdate, setLastUpdate] = useState(new Date());
     
-    const { incidents, sosAlerts, locations = {}, loading: safetyLoading, tickets } = useSafety();
+    const { incidents, sosAlerts, locations = {}, loading: safetyLoading, tickets, unreadCount } = useSafety();
 
     const fetchOverviewStats = async (eventId) => {
         try {
@@ -314,7 +314,7 @@ const EventDashboard = () => {
 
             <main style={{ flex: 1, marginLeft: 230, background: CONTENT_BG, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
-                <PageHeader title="Dashboard" />
+                <PageHeader title="Dashboard" notificationBadge={unreadCount} />
 
                 {/* Loading State */}
                 {loading && (

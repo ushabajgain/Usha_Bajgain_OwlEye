@@ -20,6 +20,7 @@ import IncidentDetails from './pages/IncidentDetails';
 import IncidentHistory from './pages/IncidentHistory';
 import VolunteersList from './pages/VolunteersList';
 import SOSAlertsList from './pages/SOSAlertsList';
+import VolunteerSOS from './pages/VolunteerSOS';
 import VolunteerDashboard from './pages/VolunteerDashboard';
 import AssignedIncidents from './pages/AssignedIncidents';
 import VolunteerStatus from './pages/VolunteerStatus';
@@ -88,7 +89,7 @@ function App() {
           {/* Volunteer Specific Routes */}
           <Route path="/volunteer/dashboard" element={<ProtectedRoute allowedRoles={['volunteer']}><VolunteerDashboard /></ProtectedRoute>} />
           <Route path="/volunteer/assigned" element={<ProtectedRoute allowedRoles={['volunteer']}><AssignedIncidents /></ProtectedRoute>} />
-          <Route path="/volunteer/sos" element={<ProtectedRoute allowedRoles={['volunteer']}><SOSAlertsList /></ProtectedRoute>} />
+          <Route path="/volunteer/sos" element={<ProtectedRoute allowedRoles={['volunteer']}><VolunteerSOS /></ProtectedRoute>} />
           <Route path="/volunteer/status" element={<ProtectedRoute allowedRoles={['volunteer']}><VolunteerStatus /></ProtectedRoute>} />
 
           <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />

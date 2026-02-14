@@ -1,43 +1,85 @@
-# Core Django
+# ==========================================
+# CORE DJANGO FRAMEWORK
+# ==========================================
 Django==4.2.16
 djangorestframework==3.17.1
 djangorestframework-simplejwt==5.5.1
 
-# CORS & Security
+# ==========================================
+# SECURITY & CORS
+# ==========================================
 django-cors-headers==4.9.0
 django-axes==8.3.1
+cryptography==41.0.7
 
-# Filtering & Pagination
+# ==========================================
+# DATABASE
+# ==========================================
+PyMySQL==1.1.2
+sqlparse==0.4.4
+
+# ==========================================
+# FILTERING, SEARCH & PAGINATION
+# ==========================================
 django-filter==24.3
 
-# Real-time (WebSockets)
+# ==========================================
+# REAL-TIME COMMUNICATION (WebSockets)
+# ==========================================
 channels==4.3.2
 channels-redis==4.3.0
 daphne==4.2.1
 
-# Database
-PyMySQL==1.1.2
-SQLAlchemy==2.0.23
-
-# Caching & Queue
+# ==========================================
+# CACHING & MESSAGE QUEUING
+# ==========================================
 redis==7.4.0
 celery==5.3.6
 
-# Image Processing
+# ==========================================
+# FILE HANDLING & IMAGE PROCESSING
+# ==========================================
 pillow==12.2.0
 
-# Payment Processing
+# ==========================================
+# PAYMENT PROCESSING
+# ==========================================
 stripe==15.0.1
 
-# Utilities
+# ==========================================
+# UTILITIES & HELPERS
+# ==========================================
 python-dotenv==1.2.2
 requests==2.33.1
-cryptography==41.0.7
+python-dateutil==2.9.0.post0
 
-# Production Server
+# ==========================================
+# PRODUCTION & DEPLOYMENT
+# ==========================================
 gunicorn==21.2.0
 whitenoise==6.6.0
+psycopg2-binary==2.9.9
 
-# Development & Debugging
+# ==========================================
+# DEVELOPMENT & DEBUGGING
+# ==========================================
 django-extensions==3.2.3
 django-debug-toolbar==4.3.0
+ipython==8.18.1
+
+# ==========================================
+# TESTING (Optional)
+# ==========================================
+# pytest==7.4.3
+# pytest-django==4.7.0
+# factory-boy==3.3.0
+# faker==21.0.0
+
+# ==========================================
+# CODE QUALITY (Optional)
+# ==========================================
+# flake8==6.1.0
+# black==23.12.0
+# isort==5.13.2
+# pylint==3.0.3
+

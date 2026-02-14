@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import { usePagination, Pagination } from '../components/Pagination';
 import { 
     Users, ShieldCheck, MapPin, Activity, 
     Search, Filter, MoreVertical, Star,
@@ -24,6 +25,7 @@ const VolunteerManagement = () => {
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [candidateUsers, setCandidateUsers] = useState([]);
     const [certifyingId, setCertifyingId] = useState(null);
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         fetchVolunteers();
@@ -69,6 +71,21 @@ const VolunteerManagement = () => {
             setCertifyingId(null);
         }
     };
+
+    const filtered = useMemo(() => {
+        return volunteers.filter(v => 
+            v.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+            v.email?.toLowerCase().includes(search.toLowerCase()) ||
+            v.phone?.toLowerCase().includes(search.toLowerCase())
+        );
+    }, [volunteers, search]);
+
+    const { page, setPage, slicedItems: paginatedVolunteers } = usePagination(filtered, itemsPerPage);
+
+    // Reset to first page when search changes
+    useEffect(() => {
+        setPage(1);
+    }, [search, setPage]);
 
     const s = {
         container: { display: 'flex', minHeight: '100vh', background: CONTENT_BG },
@@ -126,10 +143,7 @@ const VolunteerManagement = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {volunteers.filter(v => 
-                                        (v.full_name || v.username || '').toLowerCase().includes(search.toLowerCase()) ||
-                                        (v.email || '').toLowerCase().includes(search.toLowerCase())
-                                    ).map((v, idx) => (
+                                    {paginatedVolunteers.map((v, idx) => (
                                         <tr key={idx}>
                                             <td style={s.td}>
                                                 <div style={{ fontWeight: 700 }}>{v.full_name || v.username || 'Volunteer'}</div>
@@ -161,6 +175,12 @@ const VolunteerManagement = () => {
                             </table>
                         )}
                     </div>
+                    <Pagination 
+                        page={page}
+                        totalItems={filtered.length}
+                        itemsPerPage={itemsPerPage}
+                        onPageChange={setPage}
+                    />
                 </div>
 
                 {/* Certification Modal */}

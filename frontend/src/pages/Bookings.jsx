@@ -4,6 +4,7 @@ import {
     Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import Sidebar from '../components/Sidebar';
+import { Pagination, usePagination } from '../components/Pagination';
 import {
     Search, Download, ChevronLeft, ChevronRight,
     TrendingUp, Ticket, DollarSign, MoreHorizontal,
@@ -51,6 +52,9 @@ const Bookings = () => {
     const [rawTickets, setRawTickets] = useState([]); // Store full objects
     const [loading, setLoading] = useState(true);
     const [selectedTicket, setSelectedTicket] = useState(null);
+    const [itemsPerPage] = useState(10); // ✅ Pagination
+    const [categoryFilter, setCategoryFilter] = useState('All Category');
+    const [timeFilter, setTimeFilter] = useState('All Time');
 
     React.useEffect(() => {
         const fetchBookings = async () => {
@@ -109,9 +113,6 @@ const Bookings = () => {
         }));
     }, [bookings]);
 
-    const [categoryFilter, setCategoryFilter] = useState('All Category');
-    const [timeFilter, setTimeFilter] = useState('All Time');
-
     const categories = useMemo(() => {
         const set = new Set(bookings.map(b => b.category));
         return ['All Category', ...Array.from(set)];
@@ -140,6 +141,14 @@ const Bookings = () => {
             return matchesTab && matchesSearch && matchesCategory && matchesTime;
         });
     }, [activeTab, searchQuery, bookings, categoryFilter, timeFilter]);
+
+    // ✅ Pagination: paginate filtered results
+    const { page, setPage, slicedItems: paginatedBookings } = usePagination(filtered, itemsPerPage);
+
+    // Reset to first page when filters change
+    React.useEffect(() => {
+        setPage(1);
+    }, [activeTab, searchQuery, categoryFilter, timeFilter, setPage]);
 
     const s = {
         shell: { display: 'flex', minHeight: '100vh', background: CONTENT_BG, fontFamily: "'Inter','Segoe UI',sans-serif", overflowX: 'hidden' },
@@ -303,7 +312,7 @@ const Bookings = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map((b, i) => (
+                                {paginatedBookings.map((b, i) => (
                                     <tr key={i} style={{ transition: 'background 0.1s' }} onMouseEnter={e => e.currentTarget.style.background = '#fcfdfe'} onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                                         <td style={{ ...s.td, fontWeight: 700, color: ACCENT }}>{b.id}</td>
                                         <td style={s.td}>
@@ -336,15 +345,12 @@ const Bookings = () => {
                             </tbody>
                         </table>
 
-                        <div style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${BORDER}` }}>
-                            <div style={{ fontSize: 13, color: TEXT_MID }}>Showing <strong>{filtered.length}</strong> items</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <button style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid ${BORDER}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={16} color={TEXT_MID} /></button>
-                                <button style={{ width: 32, height: 32, borderRadius: 8, background: ACCENT, color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>1</button>
-                                <button style={{ width: 32, height: 32, borderRadius: 8, background: '#fff', color: TEXT_DARK, border: `1.5px solid ${BORDER}`, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>2</button>
-                                <button style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid ${BORDER}`, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronRight size={16} color={TEXT_MID} /></button>
-                            </div>
-                        </div>
+                        <Pagination 
+                            page={page}
+                            totalItems={filtered.length}
+                            itemsPerPage={itemsPerPage}
+                            onPageChange={setPage}
+                        />
                     </div>
                 </div>
 

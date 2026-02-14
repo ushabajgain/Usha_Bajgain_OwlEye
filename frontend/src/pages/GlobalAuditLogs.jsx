@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import { Pagination, usePagination } from '../components/Pagination';
 import { 
     History, ShieldAlert, Database, 
     User, AlertTriangle, Search, Filter, 
@@ -25,6 +26,10 @@ const GlobalAuditLogs = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [filterModule, setFilterModule] = useState('all');
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // ✅ Pagination: Use hook on filtered logs
+    const { page, setPage, slicedItems: paginatedLogs } = usePagination(filteredLogs, itemsPerPage);
 
     useEffect(() => {
         fetchLogs();
@@ -45,6 +50,11 @@ const GlobalAuditLogs = () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
+
+    // ✅ Reset page when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm, filterType, filterModule]);
 
     // Apply filters and search
     useMemo(() => {
@@ -306,7 +316,7 @@ const GlobalAuditLogs = () => {
                                         {logs.length === 0 ? 'No audit logs available yet' : 'No logs match your filters'}
                                     </td></tr>
                                 ) : (
-                                    filteredLogs.map(log => {
+                                    paginatedLogs.map(log => {
                                         const ActionIcon = log.icon || History;
                                         return (
                                             <tr key={log.id} style={{ hover: { background: '#f9fafb' } }}>
@@ -350,9 +360,12 @@ const GlobalAuditLogs = () => {
                             </tbody>
                         </table>
                         {filteredLogs.length > 0 && (
-                            <div style={{ padding: '16px 24px', borderTop: `1px solid ${BORDER}`, fontSize: 12, color: TEXT_MID, textAlign: 'center' }}>
-                                Showing {filteredLogs.length} of {logs.length} audit logs
-                            </div>
+                            <Pagination 
+                                page={page}
+                                totalItems={filteredLogs.length}
+                                itemsPerPage={itemsPerPage}
+                                onPageChange={setPage}
+                            />
                         )}
                     </div>
                 </div>

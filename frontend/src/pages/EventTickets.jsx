@@ -33,7 +33,7 @@ const EventTickets = () => {
     const fetchEventAndTickets = async () => {
         setLoading(true);
         try {
-            const ticketsRes = await api.get(`/tickets/my-tickets/`);
+            const ticketsRes = await api.get(`/tickets/organizer-tickets/`);
             
             const eventTickets = ticketsRes.data.filter(t => t.event_details?.id === parseInt(eventId));
             

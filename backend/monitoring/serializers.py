@@ -83,11 +83,12 @@ class SOSLogSerializer(serializers.ModelSerializer):
 class NotificationSerializer(serializers.ModelSerializer):
     notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
     created_at_display = serializers.DateTimeField(source='created_at', format='%I:%M %p', read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)  # ✅ NEW: Include user_id for frontend filtering
 
     class Meta:
         model = Notification
         fields = [
-            'id', 'user', 'event', 'title', 'message', 'notification_type', 
+            'id', 'user', 'user_id', 'event', 'title', 'message', 'notification_type', 
             'notification_type_display', 'is_read', 'created_at', 'created_at_display',
             'priority', 'entity_type', 'entity_id', 'delivered_at', 'expires_at'
         ]

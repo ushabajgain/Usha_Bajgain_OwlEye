@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import api from '../utils/api';
 import { getToken } from '../utils/auth';
+import { getDisplayNotifications, deduplicateNotifications } from '../utils/notificationHelper';
 
 const SafetySocketContext = createContext(null);
 
-export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }) => {
+export const SafetySocketProvider = ({ children, eventId: initialEventId = null }) => {
     const [eventId, setEventId] = useState(initialEventId);
     const [incidents, setIncidents] = useState({});
     const [sosAlerts, setSosAlerts] = useState({});
@@ -16,22 +17,58 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
     const [isConnected, setIsConnected] = useState(false);
     const [loading, setLoading] = useState(true);
     const ws = useRef(null);
+    const retryCountRef = useRef(0);
 
     const [notifications, setNotifications] = useState([]);
     const [notificationPage, setNotificationPage] = useState(1);
     const [hasMoreNotifs, setHasMoreNotifs] = useState(false);
     const wsDisabledRef = useRef(false); // Track if WebSocket is disabled due to backend not supporting it
 
-    // ✅ Calculate unreadCount dynamically from actual data (single source of truth)
-    const calculateUnreadCount = () => {
-        const unreadNotifications = notifications.filter(n => !n.is_read).length;
-        const unreadSosAlerts = Object.values(sosAlerts).filter(s => 
-            !s.is_read && (s.status === 'reported' || s.status === 'assigned')
-        ).length;
-        return unreadNotifications + unreadSosAlerts;
-    };
+    // ✅ FIX: Single source of truth for display notifications
+    // Run pipeline ONCE in context, use everywhere
+    const displayNotifications = useMemo(() => {
+        try {
+            const transformed = getDisplayNotifications(notifications, sosAlerts);
+            const deduplicated = deduplicateNotifications(transformed);
+            console.log(`[SafetySocketContext] Pipeline: Input=${notifications.length} notifs + ${Object.keys(sosAlerts).length} SOS → Output=${deduplicated.length}`, deduplicated);
+            return deduplicated;
+        } catch (err) {
+            console.error('[SafetySocketContext] Pipeline error:', err);
+            return [];
+        }
+    }, [notifications, sosAlerts]);
 
-    const unreadCount = calculateUnreadCount();
+    // ✅ FIX: Calculate unreadCount from FILTERED displayNotifications (not raw data)
+    // This ensures badge only counts items the user should actually see
+    const unreadCount = useMemo(() => {
+        return (displayNotifications || []).filter(n => !n.is_read).length;
+    }, [displayNotifications]);
+
+    // ✅ CRITICAL FIX: Fetch notifications independently of eventId
+    // Attendees viewing /notifications page need notifications even without event context
+    useEffect(() => {
+        const token = getToken();
+        if (!token) return;
+
+        const fetchNotificationsGlobally = async () => {
+            try {
+                const res = await api.get('/monitoring/notifications/');
+                const nData = res.data.results ? res.data.results : (res.data || []);
+                setNotifications(nData);
+                setHasMoreNotifs(!!res.data.next);
+                console.log(`[SafetySocketContext] Fetched ${nData.length} notifications globally:`, nData);
+                
+                // Debug: Show what fields each notification has
+                nData.forEach((n, idx) => {
+                    console.log(`  [${idx}] ID: ${n.id}, is_read: ${n.is_read}, user_id: ${n.user_id}, target: ${n.target}, type: ${n.notification_type}`);
+                });
+            } catch (err) {
+                console.error('[SafetySocketContext] Failed to fetch notifications:', err);
+            }
+        };
+
+        fetchNotificationsGlobally();
+    }, []); // Run once on mount
 
     useEffect(() => {
         if (!eventId) {
@@ -123,7 +160,7 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                 setEvents(eventMap);
 
                 if (alertRes.status === 'fulfilled') setSafetyAlerts(alertRes.value.data || []);
-                
+
                 if (notifyRes.status === 'fulfilled') {
                     const nData = notifyRes.value.data.results ? notifyRes.value.data.results : (notifyRes.value.data || []);
                     setNotifications(nData);
@@ -147,13 +184,22 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                 return;
             }
 
+            // Guard against infinite reconnect loop
+            if (retryCountRef.current > 5) {
+                console.warn('[WebSocket] Max retry attempts reached. Stopping reconnection.');
+                return;
+            }
+
             if (ws.current) ws.current.close();
             
             try {
                 const socket = new WebSocket(currentWsUrl);
                 ws.current = socket;
 
-                socket.onopen = () => setIsConnected(true);
+                socket.onopen = () => {
+                    setIsConnected(true);
+                    retryCountRef.current = 0; // Reset retry count on successful connection
+                };
 
                 socket.onerror = (err) => {
                     // Mark WebSocket as disabled for this session
@@ -169,26 +215,29 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                         
                         // ✅ STEP 5.3.4: Handle targeted SOS_NEARBY messages
                         if (data.type === 'SOS_NEARBY') {
-                            setNearbySosAlerts(prev => ({
-                                ...prev,
-                                [data.sos_id]: {
-                                    id: data.sos_id,
-                                    event_id: data.event_id,
-                                    latitude: data.latitude,
-                                    longitude: data.longitude,
-                                    distance: data.distance,
-                                    distance_text: data.distance_text,
-                                    sos_type: data.sos_type,
-                                    sos_type_display: data.sos_type_display,
-                                    priority: data.priority,
-                                    user_name: data.user_name,
-                                    user_phone: data.user_phone,
-                                    location_name: data.location_name,
-                                    status: data.status,
-                                    message: data.message,
-                                    created_at: new Date().toISOString()
-                                }
-                            }));
+                            setNearbySosAlerts(prev => {
+                                if (prev[data.sos_id]) return prev;
+                                return {
+                                    ...prev,
+                                    [data.sos_id]: {
+                                        id: data.sos_id,
+                                        event_id: data.event_id,
+                                        latitude: data.latitude,
+                                        longitude: data.longitude,
+                                        distance: data.distance,
+                                        distance_text: data.distance_text,
+                                        sos_type: data.sos_type,
+                                        sos_type_display: data.sos_type_display,
+                                        priority: data.priority,
+                                        user_name: data.user_name,
+                                        user_phone: data.user_phone,
+                                        location_name: data.location_name,
+                                        status: data.status,
+                                        message: data.message,
+                                        created_at: new Date().toISOString()
+                                    }
+                                };
+                            });
                             console.log(`[SOS_NEARBY] ✓ New nearby SOS: ${data.sos_id} (${data.distance_text})`);
                             return;
                         }
@@ -200,13 +249,41 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                                 setIncidents(prev => ({ ...prev, [data.id]: data }));
                             }
                         } 
-                        else if (data.entity_type === 'sos') {
+                        if (data.entity_type === 'sos') {
                             // ✅ STEP 5.3.5: Still handle for organizers/admins
                             // Volunteers only see SOS via SOS_NEARBY (targeted) not this global broadcast
                             if (data.status === 'resolved') {
                                 setSosAlerts(prev => { const n = { ...prev }; delete n[data.id]; return n; });
                             } else {
-                                setSosAlerts(prev => ({ ...prev, [data.id]: data }));
+                                setSosAlerts(prev => {
+                                    if (prev[data.id]) return prev;
+                                    return { ...prev, [data.id]: data };
+                                });
+                            }
+                            
+                            // ✅ CRITICAL FIX: Also update notifications state so display pipeline sees it (no reload needed!)
+                            // This ensures SOS notifications show in real-time
+                            if (data.status !== 'resolved') {
+                                setNotifications(prev => {
+                                    const notifId = `sos-${data.id}`;
+                                    if (prev.some(n => n.id === notifId || n.dbId === data.id)) return prev;
+                                    
+                                    return [{
+                                        id: notifId,
+                                        dbId: data.id,
+                                        type: 'sos',
+                                        notification_type: 'sos',
+                                        user_id: data.user_id,
+                                        user_name: data.user_name || 'Unknown',
+                                        title: `SOS from ${data.user_name || 'Attendee'}`,
+                                        message: data.message || 'Emergency alert triggered',
+                                        assigned_volunteer_id: data.assigned_volunteer_id,
+                                        assigned_volunteer_name: data.assigned_volunteer_name,
+                                        distance_text: data.distance_text,
+                                        is_read: false,
+                                        created_at: data.created_at || new Date().toISOString()
+                                    }, ...prev];
+                                });
                             }
                         } 
                         else if (data.entity_type === 'user' || data.entity_type === 'responder') {
@@ -236,7 +313,10 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                             setSafetyAlerts(prev => [data, ...prev].slice(0, 10));
                         }
                         else if (data.entity_type === 'notification') {
-                            setNotifications(prev => [data, ...prev]);
+                            setNotifications(prev => {
+                                if (prev.some(n => n.id === data.id)) return prev;
+                                return [data, ...prev];
+                            });
                             // ✅ unreadCount calculated dynamically - no need to update
                         }
                         else if (data.entity_type === 'notification_read') {
@@ -266,6 +346,7 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                 setIsConnected(false);
                 // Only reconnect if the socket is still the current one
                 if (ws.current === socket) {
+                    retryCountRef.current++;
                     setTimeout(connect, 5000);
                 }
             };
@@ -283,29 +364,45 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
         };
     }, [eventId]);
 
-    const markAsRead = async (id) => {
+    const markAsRead = useCallback(async (id) => {
+        const prev = notifications;
+        
+        // Optimistic UI update first
+        setNotifications(prev =>
+            prev.map(n => n.id === id ? { ...n, is_read: true } : n)
+        );
+
         try {
             await api.patch(`/monitoring/notifications/${id}/`, { is_read: true });
-            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-            // ✅ unreadCount now calculated dynamically - no need to setUnreadCount
-        } catch (err) { console.error("Mark read failed", err); }
-    };
+        } catch (err) {
+            // Revert on error
+            setNotifications(prev);
+            console.error("Mark read failed", err);
+        }
+    }, [notifications]);
 
-    const markSOSAsRead = async (sosId) => {
+    const markSOSAsRead = useCallback(async (sosId) => {
+        const prev = sosAlerts;
+        
+        // Optimistic UI update first
+        setSosAlerts(prev => {
+            const updated = { ...prev };
+            if (updated[sosId]) {
+                updated[sosId] = { ...updated[sosId], is_read: true };
+            }
+            return updated;
+        });
+
         try {
             await api.post(`/monitoring/sos/${sosId}/mark_read/`);
-            setSosAlerts(prev => {
-                const updated = { ...prev };
-                if (updated[sosId]) {
-                    updated[sosId] = { ...updated[sosId], is_read: true };
-                }
-                return updated;
-            });
-            // ✅ unreadCount now calculated dynamically - no need to setUnreadCount
-        } catch (err) { console.error("Mark SOS read failed", err); }
-    };
+        } catch (err) {
+            // Revert on error
+            setSosAlerts(prev);
+            console.error("Mark SOS read failed", err);
+        }
+    }, [sosAlerts]);
 
-    const markAllAsRead = async () => {
+    const markAllAsRead = useCallback(async () => {
         try {
             // Mark all DB notifications as read
             await api.post('/monitoring/notifications/mark_all_read/');
@@ -330,11 +427,10 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
                 });
                 return updated;
             });
-            // ✅ unreadCount now calculated dynamically - will become 0 automatically
         } catch (err) { console.error("Mark all as read failed", err); }
-    };
+    }, [sosAlerts]);
 
-    const loadMoreNotifications = async () => {
+    const loadMoreNotifications = useCallback(async () => {
         if (!hasMoreNotifs || loading) return;
         try {
             const nextP = notificationPage + 1;
@@ -343,7 +439,7 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
             setHasMoreNotifs(!!res.data.next);
             setNotificationPage(nextP);
         } catch (e) { console.error("Load more failed", e); }
-    };
+    }, [hasMoreNotifs, loading, notificationPage]);
 
     const value = useMemo(() => ({
         eventId, updateEventId: setEventId,
@@ -352,15 +448,15 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = '1' }
         nearbySosAlerts, setNearbySosAlerts,  // ✅ STEP 5.3.4: Expose nearby SOS alerts
         locations, setLocations,
         safetyAlerts,
-        notifications, unreadCount, markAsRead, markSOSAsRead, markAllAsRead, loadMoreNotifications, hasMoreNotifs,
+        notifications, displayNotifications, unreadCount, markAsRead, markSOSAsRead, markAllAsRead, loadMoreNotifications, hasMoreNotifs,
         tickets, setTickets,
         events, setEvents,
         isConnected,
         loading,
         ws  // Expose WebSocket ref for direct access in location tracking and other features
     }), [
-        eventId, incidents, sosAlerts, nearbySosAlerts, locations, safetyAlerts, 
-        notifications, unreadCount, hasMoreNotifs, tickets, 
+        eventId, incidents, sosAlerts, nearbySosAlerts, locations, safetyAlerts,
+        notifications, displayNotifications, unreadCount, hasMoreNotifs, tickets,
         events, isConnected, loading
     ]);
 
