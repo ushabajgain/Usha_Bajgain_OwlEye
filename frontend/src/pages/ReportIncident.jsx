@@ -161,8 +161,11 @@ const ReportIncident = () => {
                  
                  // If we got an English part, use it; otherwise use coordinates
                  if (englishPart && englishPart.length > 0) {
-                     // Format as: Location, Nepal
-                     return `${englishPart}, Nepal`;
+                     // Clean up duplicative "Nepal" occurrences
+                     const parts = englishPart.split(',').map(s => s.trim());
+                     const cleanParts = parts.filter((part, idx) => part !== '' && part.toLowerCase() !== 'nepal' && part !== parts[idx - 1]);
+                     cleanParts.push('Nepal');
+                     return cleanParts.join(', ');
                  }
                  return `Nepal`;
              } catch (e) {
@@ -272,16 +275,23 @@ const ReportIncident = () => {
         };
 
         try {
-            const res = await api.post('/monitoring/incidents/', payload);
+            await Promise.all([
+                api.post('/monitoring/incidents/', payload),
+                new Promise(resolve => setTimeout(resolve, 800))
+            ]);
+            
             setStatus({ type: 'success', message: 'Report sent successfully. Help is standby.' });
             setLastSubmitTime(Date.now());
+            setIsSubmitting(false);
             
-            // Success reset
-            setSelectedCategory('');
-            setDescription('');
-            
-            // Redirect after delay
-            setTimeout(() => setStatus({ type: '', message: '' }), 10000);
+            // Redirect/Reset after delay
+            setTimeout(() => {
+                setStatus({ type: '', message: '' });
+                setSelectedCategory('');
+                setDescription('');
+                setLocation(null); // Reset location to force fresh capture if needed
+                setFieldErrors({});
+            }, 3000);
         } catch (err) {
             console.error("Submission failed, saving as draft...", err);
             // Offline Handling: Save to Draft Queue

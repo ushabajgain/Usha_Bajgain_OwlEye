@@ -14,7 +14,6 @@ const BORDER = C.border;
 
 const VolunteerStatus = () => {
     const [currentStatus, setCurrentStatus] = useState('available');
-    const [sharingLocation, setSharingLocation] = useState(true);
     const [loading, setLoading] = useState(false);
     const [fetchStatus, setFetchStatus] = useState({ type: '', msg: '' });
     const [targetEventId, setTargetEventId] = useState('1');
@@ -25,7 +24,7 @@ const VolunteerStatus = () => {
             try {
                 const [evRes, locRes] = await Promise.all([
                     api.get('/events/'),
-                    api.get('/monitoring/responder-locations/')
+                    api.get('/monitoring/responders/')
                 ]);
                 
                 if (evRes.data.length > 0) setTargetEventId(evRes.data[0].id.toString());
@@ -34,7 +33,6 @@ const VolunteerStatus = () => {
                 if (locRes.data.length > 0) {
                     const myLoc = locRes.data[0]; // ResponderLocationViewSet filters by user if not admin
                     setCurrentStatus(myLoc.status || 'available');
-                    setSharingLocation(myLoc.is_active);
                 }
             } catch (e) {
                 console.error("Failed to load responder status", e);
@@ -45,10 +43,7 @@ const VolunteerStatus = () => {
 
     const statuses = [
         { id: 'available', name: 'Available', icon: CheckCircle, color: '#10b981', desc: 'Ready to receive new tasks' },
-        { id: 'patrol', name: 'On Patrol', icon: MapPin, color: '#3b82f6', desc: 'Actively monitoring designated zones' },
-        { id: 'responding', name: 'Responding', icon: Activity, color: '#f59e0b', desc: 'Currently attending an incident' },
-        { id: 'busy', name: 'Busy', icon: Clock, color: '#6366f1', desc: 'Performing other vital duties' },
-        { id: 'offline', name: 'Offline', icon: Power, color: '#64748b', desc: 'End of shift / Break' }
+        { id: 'busy', name: 'Busy', icon: Clock, color: '#6366f1', desc: 'Performing other vital duties' }
     ];
 
     const handleSave = async () => {
@@ -57,14 +52,20 @@ const VolunteerStatus = () => {
 
         const sendUpdate = async (lat = 27.7, lng = 85.3) => {
             try {
-                await api.post('/monitoring/responder-locations/', {
-                    event: targetEventId,
-                    status: currentStatus,
-                    is_active: sharingLocation,
-                    latitude: lat,
-                    longitude: lng
-                });
+                await Promise.all([
+                    api.post('/monitoring/responders/', {
+                        event: targetEventId,
+                        status: currentStatus,
+                        is_active: true,
+                        latitude: Number(lat).toFixed(6),
+                        longitude: Number(lng).toFixed(6)
+                    }),
+                    new Promise(resolve => setTimeout(resolve, 800))
+                ]);
                 setFetchStatus({ type: 'success', msg: 'Status updated successfully!' });
+                
+                // Maybe auto hide the message after a while
+                setTimeout(() => setFetchStatus({ type: '', msg: '' }), 3000);
             } catch (err) {
                 setFetchStatus({ type: 'error', msg: 'Failed to update system status.' });
             } finally {
@@ -72,14 +73,14 @@ const VolunteerStatus = () => {
             }
         };
 
-        if (sharingLocation && navigator.geolocation) {
+        if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 pos => sendUpdate(pos.coords.latitude, pos.coords.longitude),
                 err => {
                     console.warn("Location failed, sending with defaults", err);
                     sendUpdate();
                 },
-                { timeout: 10000 }
+                { timeout: 3000, maximumAge: 60000 }
             );
         } else {
             sendUpdate();
@@ -137,20 +138,6 @@ const VolunteerStatus = () => {
                             </div>
                         ))}
 
-                        <div 
-                            style={{ ...s.toggle, border: sharingLocation ? `1px solid ${ACCENT}` : `1px solid ${BORDER}` }}
-                            onClick={() => setSharingLocation(!sharingLocation)}
-                        >
-                            {sharingLocation ? <Eye size={20} color={ACCENT} /> : <EyeOff size={20} color={TEXT_MID} />}
-                            <div style={{ flex: 1 }}>
-                                <b style={{ fontSize: 14, color: TEXT_DARK }}>Live Location Sharing</b>
-                                <p style={{ margin: 0, fontSize: 12, color: TEXT_MID }}>Toggle visibility on the organizers' dashboard map</p>
-                            </div>
-                            <div style={{ width: 44, height: 24, borderRadius: 12, background: sharingLocation ? ACCENT : '#CBD5E1', position: 'relative' }}>
-                                <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: sharingLocation ? 23 : 3, transition: '0.2s' }} />
-                            </div>
-                        </div>
-
                         {fetchStatus.msg && (
                             <div style={{ marginTop: 20, padding: '12px', borderRadius: 8, background: fetchStatus.type === 'success' ? '#f0fdf4' : '#fef2f2', color: fetchStatus.type === 'success' ? '#166534' : '#991b1b', fontSize: 13, fontWeight: 600, border: `1px solid ${fetchStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}` }}>
                                 {fetchStatus.msg}
@@ -161,7 +148,7 @@ const VolunteerStatus = () => {
                             onClick={handleSave}
                             disabled={loading}
                             style={{ width: '100%', marginTop: 32, padding: '16px', borderRadius: 12, background: ACCENT, color: '#fff', border: 'none', fontWeight: 800, fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: loading ? 0.7 : 1 }}>
-                            {loading ? <Loader2 size={18} className="animate-spin" /> : 'Save Visibility Settings'}
+                            {loading ? <><Loader2 size={18} className="animate-spin" /> Saving Status...</> : 'Save Status'}
                         </button>
                     </div>
                 </div>

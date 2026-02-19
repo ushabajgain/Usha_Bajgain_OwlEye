@@ -124,8 +124,11 @@ const MapPicker = ({ location, setLocation, onAddressUpdate }) => {
             );
             const data = await res.json();
             if (data.display_name) {
-                setSelectedAddress(data.display_name);
-                if (onAddressUpdate) onAddressUpdate(data.display_name);
+                const parts = data.display_name.split(',').map(s => s.trim());
+                const cleanParts = parts.filter((part, idx) => part !== '' && part !== parts[idx - 1]);
+                const cleanAddress = cleanParts.join(', ');
+                setSelectedAddress(cleanAddress);
+                if (onAddressUpdate) onAddressUpdate(cleanAddress);
             }
         } catch (err) {
             console.error('Reverse geocode error:', err);

@@ -16,7 +16,10 @@ const TEXT_DARK = C.textPrimary;
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
+import { useFeedback } from '../context/FeedbackContext';
+
 const UserManagement = () => {
+    const { showToast } = useFeedback();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -28,17 +31,20 @@ const UserManagement = () => {
                 const res = await api.get('/accounts/all-users/'); 
                 const data = Array.isArray(res.data) ? res.data : res.data.results || [];
                 // Transform backend keys if necessary or use directly
-                const formattedUsers = data.map(u => ({
-                    id: u.id,
-                    name: u.full_name || 'No Name',
-                    email: u.email,
-                    role: u.role,
-                    status: u.is_active ? 'active' : 'banned',
-                    joined: new Date(u.created_at).toLocaleDateString()
-                }));
+                const formattedUsers = data
+                    .filter(u => u.role !== 'admin')
+                    .map(u => ({
+                        id: u.id,
+                        name: u.full_name || 'No Name',
+                        email: u.email,
+                        role: u.role,
+                        status: u.is_active ? 'active' : 'banned',
+                        joined: new Date(u.created_at).toLocaleDateString()
+                    }));
                 setUsers(formattedUsers);
             } catch (err) {
                 console.error(err);
+                showToast("Failed to fetch user list.", 'error');
             } finally {
                 setLoading(false);
             }
@@ -52,9 +58,10 @@ const UserManagement = () => {
             setUsers(users.map(u => 
                 u.id === id ? { ...u, status: u.status === 'active' ? 'banned' : 'active' } : u
             ));
+            showToast("User status updated successfully.");
         } catch (err) {
             console.error("Failed to toggle status:", err);
-            alert("Failed to update user status.");
+            showToast("Failed to update user status.", 'error');
         }
     };
 
@@ -62,9 +69,10 @@ const UserManagement = () => {
         try {
             await api.post(`/accounts/update-role/${id}/`, { role: newRole });
             setUsers(users.map(u => u.id === id ? { ...u, role: newRole } : u));
+            showToast(`User role updated to ${newRole}.`);
         } catch (err) {
             console.error("Failed to change role:", err);
-            alert("Failed to change user role.");
+            showToast("Failed to change user role.", 'error');
         }
     };
 

@@ -10,6 +10,7 @@ import {
     AlertTriangle, ShieldAlert, Clock, MapPin, 
     User, Loader2, CheckCircle, ArrowRight, Search
 } from 'lucide-react';
+import { useFeedback } from '../context/FeedbackContext';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -19,6 +20,7 @@ const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
 const IncidentControlCenter = () => {
+    const { showToast, confirmAction } = useFeedback();
     const navigate = useNavigate();
     const [incidents, setIncidents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -37,7 +39,7 @@ const IncidentControlCenter = () => {
         try {
             const res = await api.get('/monitoring/incidents/');
             // Only show active-ish incidents in this control center
-            setIncidents(res.data.filter(i => i.status !== 'resolved' && i.status !== 'false'));
+            setIncidents(res.data.filter(i => i.status !== 'resolved' && i.status !== 'false_alarm' && i.status !== 'closed'));
         } catch (err) {
             console.error(err);
         } finally {
@@ -46,20 +48,37 @@ const IncidentControlCenter = () => {
     };
 
     const handleAction = async (id, action) => {
+        if (action === 'false') {
+            confirmAction({
+                title: "Confirm False Alarm",
+                message: "Are you sure you want to mark this incident as a False Alarm? This will alert the reporter and close the case.",
+                type: 'danger',
+                onConfirm: () => performAction(id, action)
+            });
+        } else {
+            performAction(id, action);
+        }
+    };
+
+    const performAction = async (id, action) => {
         try {
             if (action === 'resolve') {
                 await api.patch(`/monitoring/incidents/${id}/`, { status: 'resolved' });
+                showToast("Incident resolved successfully.");
             } else if (action === 'false') {
-                await api.patch(`/monitoring/incidents/${id}/`, { status: 'false' });
+                await api.patch(`/monitoring/incidents/${id}/`, { status: 'false_alarm' });
+                showToast("Incident marked as false alarm.", 'warning');
             } else if (action === 'verify') {
                 await api.patch(`/monitoring/incidents/${id}/`, { status: 'verified' });
+                showToast("Incident acknowledged and verified.");
             }
             
-            // Optimistic / Local update
-            setIncidents(incidents.filter(i => i.id !== id));
+            // ALWAYS re-fetch from backend — never trust local state after mutation
+            await fetchIncidents();
         } catch (err) {
             console.error("Action failed:", err);
-            alert("Failed to update incident protocol.");
+            const detail = err.response?.data?.status || err.response?.data?.detail || "Failed to update incident.";
+            showToast(Array.isArray(detail) ? detail[0] : detail, 'error');
         }
     };
 
@@ -151,8 +170,33 @@ const IncidentControlCenter = () => {
                                             </td>
                                             <td style={s.td}>
                                                 <div style={{ display: 'flex', gap: 8 }}>
-                                                    <button onClick={() => handleAction(i.id, 'verify')} title="Verify" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#16a34a' }}><CheckCircle size={18} /></button>
-                                                    <button onClick={() => handleAction(i.id, 'false')} title="Mark False" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#dc2626' }}><ShieldAlert size={18} /></button>
+                                                    {i.status === 'pending' ? (
+                                                        <>
+                                                            <button 
+                                                                onClick={() => handleAction(i.id, 'verify')} 
+                                                                style={{ padding: '6px 12px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                                                Acknowledge
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleAction(i.id, 'false')} 
+                                                                style={{ padding: '6px 12px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                                                False Alarm
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button 
+                                                                onClick={() => handleAction(i.id, 'resolve')} 
+                                                                style={{ padding: '6px 12px', background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                                                Resolve
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleAction(i.id, 'false')} 
+                                                                style={{ padding: '6px 12px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                                                False Alarm
+                                                            </button>
+                                                        </>
+                                                    )}
                                                     <button onClick={() => handleDetails(i.id)} title="View Details" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: ACCENT, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                                                         <ArrowRight size={14} /> Details
                                                     </button>

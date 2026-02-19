@@ -103,7 +103,11 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = null 
                 const incidentMap = {};
                 if (incRes.status === 'fulfilled') {
                     (incRes.value.data || []).forEach(i => {
-                        if (i.status !== 'resolved' && i.status !== 'false') incidentMap[i.id] = i;
+                        if (i.status !== 'resolved' && i.status !== 'false_alarm') {
+                            // Normalize: ensure event_id is always available for filtering
+                            i.event_id = i.event_id || i.event;
+                            incidentMap[i.id] = i;
+                        }
                     });
                 }
                 setIncidents(incidentMap);
@@ -111,7 +115,12 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = null 
                 const sosMap = {};
                 if (sosRes.status === 'fulfilled') {
                     (sosRes.value.data || []).forEach(s => {
-                        if (s.status !== 'resolved') sosMap[s.id] = s;
+                        if (s.status !== 'resolved') {
+                            // Normalize: ensure both field names exist for consistency
+                            s.event_id = s.event_id || s.event;
+                            s.assigned_volunteer_id = s.assigned_volunteer_id || s.assigned_volunteer;
+                            sosMap[s.id] = s;
+                        }
                     });
                 }
                 setSosAlerts(sosMap);
@@ -243,10 +252,15 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = null 
                         }
                         
                         if (data.entity_type === 'incident') {
-                            if (data.status === 'resolved' || data.status === 'false') {
+                            if (data.status === 'resolved' || data.status === 'false_alarm') {
                                 setIncidents(prev => { const n = { ...prev }; delete n[data.id]; return n; });
                             } else {
-                                setIncidents(prev => ({ ...prev, [data.id]: data }));
+                                // CRITICAL FIX: Merge with existing data to preserve fields
+                                // (like `event` from API) that the WebSocket payload may omit
+                                setIncidents(prev => ({
+                                    ...prev,
+                                    [data.id]: { ...prev[data.id], ...data, event_id: data.event_id || (prev[data.id] && prev[data.id].event) || data.event }
+                                }));
                             }
                         } 
                         if (data.entity_type === 'sos') {
@@ -255,10 +269,13 @@ export const SafetySocketProvider = ({ children, eventId: initialEventId = null 
                             if (data.status === 'resolved') {
                                 setSosAlerts(prev => { const n = { ...prev }; delete n[data.id]; return n; });
                             } else {
-                                setSosAlerts(prev => {
-                                    if (prev[data.id]) return prev;
-                                    return { ...prev, [data.id]: data };
-                                });
+                                // CRITICAL FIX: Merge with existing data so status transitions
+                                // (reported → assigned, assigned → resolved) update the UI.
+                                // Previous code skipped if the entry existed, preventing status updates.
+                                setSosAlerts(prev => ({
+                                    ...prev,
+                                    [data.id]: { ...prev[data.id], ...data, event_id: data.event_id || (prev[data.id] && prev[data.id].event) || data.event }
+                                }));
                             }
                             
                             // ✅ CRITICAL FIX: Also update notifications state so display pipeline sees it (no reload needed!)

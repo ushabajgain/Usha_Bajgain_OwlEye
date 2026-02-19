@@ -235,13 +235,10 @@ class EventVolunteersView(APIView):
 
         responder_locations = ResponderLocation.objects.filter(
             event_id=event_id,
-            is_active=True,
-            event__start_datetime__lte=now,     # Event started
-            event__end_datetime__gt=now,        # Event not ended (using __gt for consistency)
-            last_updated__gte=recency_cutoff    # Location data within recency window
+            is_active=True
         ).select_related('user')
 
-        # Extract unique volunteers
+        # Extract unique volunteers from active responder locations
         volunteers = [rl.user for rl in responder_locations]
         
         serializer = UserSerializer(volunteers, many=True)

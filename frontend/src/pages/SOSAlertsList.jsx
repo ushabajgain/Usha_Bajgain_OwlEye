@@ -67,9 +67,10 @@ const SOSAlertsList = () => {
         setDispatchingId(sosId);
         try {
             // PATCH the SOS alert with the selected volunteer
+            // ⚠️ Using 'assigned' which is a valid choice in backend SOSAlert models
             const res = await api.patch(`/monitoring/sos/${sosId}/`, {
-                assigned_volunteer: selectedVolunteerId,
-                status: 'acknowledged'
+                assigned_volunteer: parseInt(selectedVolunteerId),
+                status: 'assigned'
             });
             
             setDispatchMessage({ [sosId]: { text: `Successfully assigned to ${allVolunteers.find(v => v.id == selectedVolunteerId)?.full_name}`, type: 'success' } });
@@ -79,7 +80,8 @@ const SOSAlertsList = () => {
             const updated = await api.get('/monitoring/sos/');
             setAlerts(updated.data);
         } catch (err) {
-            setDispatchMessage({ [sosId]: { text: "Manual assignment failed.", type: 'error' } });
+            const errorDetail = err.response?.data?.assigned_volunteer || err.response?.data?.error || "Manual assignment failed.";
+            setDispatchMessage({ [sosId]: { text: Array.isArray(errorDetail) ? errorDetail[0] : errorDetail, type: 'error' } });
         } finally {
             setDispatchingId(null);
         }
@@ -229,7 +231,7 @@ const SOSAlertsList = () => {
                             <Loader2 size={40} className="animate-spin" color={ACCENT} style={{ margin: '0 auto' }} />
                         </div>
                     ) : filtered.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: 80, background: CARD_BG, borderRadius: 20, border: `1px dashed ${BORDER}` }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 80, background: CARD_BG, borderRadius: 20, border: `1px dashed ${BORDER}` }}>
                             <Siren size={48} color={TEXT_MID} style={{ opacity: 0.2, margin: '0 auto 16px' }} />
                             <h2 style={{ color: TEXT_DARK, fontWeight: 800 }}>No Alerts Found</h2>
                             <p style={{ color: TEXT_MID }}>Adjust your search or filter to see more.</p>

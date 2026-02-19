@@ -57,7 +57,7 @@ const navSections = [
     {
         label: 'Attendee Records',
         items: [
-            { name: 'Events', icon: Calendar, path: '/events', roles: ['attendee', 'volunteer'] },
+            { name: 'Events', icon: Calendar, path: '/events', roles: ['attendee'] },
             { name: 'My Events', icon: Calendar, path: '/attendee/my-events', roles: ['attendee'] },
             { name: 'Tickets', icon: Ticket, path: '/bookings', roles: ['organizer'] },
 

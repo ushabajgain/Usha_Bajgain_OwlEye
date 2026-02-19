@@ -239,7 +239,7 @@ const VolunteersList = () => {
 
                 <div style={s.content}>
                     {!loading && events.length === 0 && (
-                        <div style={{ textAlign: 'center', padding: '60px 20px', background: CARD_BG, borderRadius: 12, border: `1px dashed ${BORDER}`, color: TEXT_MID }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '60px 20px', background: CARD_BG, borderRadius: 12, border: `1px dashed ${BORDER}`, color: TEXT_MID }}>
                             <Shield size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
                             <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No events found</p>
                             <p style={{ fontSize: 13, marginBottom: 16 }}>You don't have any active events yet. Create an event first to assign volunteers.</p>
@@ -346,7 +346,7 @@ const VolunteersList = () => {
                                         })}
                                     </div>
                                 ) : (
-                                    <div style={{ textAlign: 'center', padding: '40px 20px', background: CARD_BG, borderRadius: 12, border: `1px dashed ${BORDER}`, color: TEXT_MID }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '40px 20px', background: CARD_BG, borderRadius: 12, border: `1px dashed ${BORDER}`, color: TEXT_MID }}>
                                         <Shield size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                                         <p>No assigned volunteers yet</p>
                                     </div>
@@ -400,7 +400,7 @@ const VolunteersList = () => {
                             )}
                         </>
                     ) : (
-                        <div style={{ textAlign: 'center', padding: 100, color: TEXT_MID }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 100, color: TEXT_MID }}>
                             <Shield size={48} style={{ margin: '0 auto 16px', opacity: 0.2 }} />
                             <p>Select an event to manage volunteers</p>
                         </div>

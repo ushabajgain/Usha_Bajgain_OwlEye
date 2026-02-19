@@ -79,46 +79,66 @@ class CurrentLocationsView(views.APIView):
 
     def get(self, request, event_id):
         redis_client = redis.StrictRedis(host='127.0.0.1', port=6379, db=0, decode_responses=True)
+        # We check both the specific event bucket and potentially global users
         locations_key = f"event:{event_id}:locations"
-        all_locations = redis_client.hgetall(locations_key)
+        active_locations = redis_client.hgetall(locations_key)
         
-        # MVP: Support filtering for responders/volunteers only
         responders_only = request.query_params.get('responders_only', 'false').lower() == 'true'
         
-        results = []
-        ghost_users_removed = []
-        
-        for user_id_str, data_str in all_locations.items():
+        # Prepare a map of active users from Redis
+        active_user_map = {}
+        for user_id_str, data_str in active_locations.items():
             try:
-                # Safely parse user_id
-                try:
-                    user_id = int(user_id_str)
-                except (ValueError, TypeError):
-                    redis_client.hdel(locations_key, user_id_str)
-                    continue
-                
+                user_id = int(user_id_str)
                 loc_data = json.loads(data_str)
+                active_user_map[user_id] = loc_data
+            except (ValueError, TypeError, json.JSONDecodeError):
+                continue
                 
-                if not User.objects.filter(id=user_id).exists():
-                    redis_client.hdel(locations_key, user_id_str)
-                    ghost_users_removed.append({
-                        'user_id': user_id,
-                        'name': loc_data.get('name', 'Unknown')
-                    })
-                    continue
+        # Fetch all users from the database who have coordinates
+        db_users = User.objects.filter(latitude__isnull=False, longitude__isnull=False)
+        if responders_only:
+            db_users = db_users.filter(role='volunteer')
+            
+        results = []
+        added_user_ids = set()
+        
+        # 1. Add people actively in Redis (with real-time updates)
+        for user_id, loc_data in active_user_map.items():
+            if not User.objects.filter(id=user_id).exists():
+                redis_client.hdel(locations_key, str(user_id))
+                continue
+            
+            if responders_only and loc_data.get('role') != 'volunteer':
+                continue
                 
-                if responders_only and loc_data.get('role') != 'volunteer':
-                    continue
-                    
-                results.append(loc_data)
-            except (ValueError, json.JSONDecodeError) as e:
-                pass
-        
-        if ghost_users_removed:
-            print(f"🚫 Removed {len(ghost_users_removed)} ghost user(s) from event {event_id}:")
-            for gu in ghost_users_removed:
-                print(f"   - {gu['name']} (ID: {gu['user_id']})")
-        
+            results.append(loc_data)
+            added_user_ids.add(user_id)
+            
+        # 2. Add remaining users from DB who aren't currently active in Redis
+        for user in db_users:
+            if user.id in added_user_ids:
+                continue
+                
+            pic_url = None
+            if user.profile_image:
+                pic_url = request.build_absolute_uri(user.profile_image.url)
+                
+            results.append({
+                'user_id': user.id,
+                'name': user.full_name or user.username,
+                'role': user.role,
+                'lat': float(user.latitude),
+                'latitude': float(user.latitude),
+                'lng': float(user.longitude),
+                'longitude': float(user.longitude),
+                'status': 'offline', # Mark users purely from DB as offline
+                'phone': getattr(user, 'phone_number', 'N/A'),
+                'pic': pic_url,
+                'last_seen': 'Offline',
+                'distance': None
+            })
+            
         return Response(results)
 
 import html
@@ -313,7 +333,7 @@ def find_nearby_volunteers(latitude, longitude, event_id, radius_km=None):
 
 
 class IncidentViewSet(viewsets.ModelViewSet):
-    queryset = Incident.objects.filter(is_active=True).order_by('-created_at')
+    queryset = Incident.objects.all().order_by('-created_at')
     serializer_class = IncidentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -322,7 +342,22 @@ class IncidentViewSet(viewsets.ModelViewSet):
         include_archived = self.request.query_params.get('include_archived')
         if include_archived == 'true':
             return Incident.objects.all().order_by('-created_at')
-        return self.queryset
+        
+        # For detail views (retrieve/update), allow access to any incident
+        if self.action in ['retrieve', 'update', 'partial_update']:
+            return Incident.objects.all().order_by('-created_at')
+        
+        # For assigned volunteer view
+        assigned_to_me = self.request.query_params.get('assigned_to_me')
+        if assigned_to_me == 'true':
+            return Incident.objects.filter(
+                assigned_volunteer=self.request.user,
+                is_active=True,
+                status__in=['pending', 'verified', 'responding']
+            ).order_by('-created_at')
+        
+        # Default list: only active (non-terminal) incidents
+        return Incident.objects.filter(is_active=True).order_by('-created_at')
 
     def perform_create(self, serializer):
         reporter = self.request.user
@@ -399,63 +434,141 @@ class IncidentViewSet(viewsets.ModelViewSet):
         self.broadcast_incident(incident, 'new_incident')
 
     def perform_update(self, serializer):
+        """
+        COMPLETE Incident update handler.
+        Enforces: status transitions, is_active flags, timestamps, notifications, audit logs.
+        """
+        from rest_framework.exceptions import ValidationError, PermissionDenied
+        
         user = self.request.user
         old_instance = Incident.objects.get(pk=serializer.instance.pk)
         new_status = self.request.data.get('status')
         assigned_volunteer_id = self.request.data.get('assigned_volunteer')
         
-        # ✅ EVENT-LEVEL + TASK-LEVEL CONSTRAINT: Volunteer can only be assigned to ONE ACTIVE event at a time
-        if assigned_volunteer_id and assigned_volunteer_id != (old_instance.assigned_volunteer.id if old_instance.assigned_volunteer else None):
-            # Volunteer is being assigned to this incident (new assignment or change)
-            try:
-                volunteer = User.objects.get(id=assigned_volunteer_id)
-            except User.DoesNotExist:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError({"assigned_volunteer": "Volunteer not found."})
-            
-            # ✅ STRICT SCOPE CHECK: Volunteer must belong to the SAME event as the incident
-            volunteer_in_event = ResponderLocation.objects.filter(
-                user=volunteer,
-                event_id=old_instance.event_id,
-                is_active=True
-            ).exists()
-            
-            if not volunteer_in_event:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError({
-                    "assigned_volunteer": "Volunteer must be assigned to the same event as this incident. They cannot be assigned across events."
-                })
-            
-            # Check for EVENT-level conflict (volunteer already assigned to another ACTIVE event)
-            conflict_info = check_volunteer_active_event_conflict(volunteer, old_instance.event_id)
-            if conflict_info and conflict_info['has_conflict']:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError({
-                    "assigned_volunteer": f"Volunteer is already assigned to {conflict_info['conflicting_event_name']} event. They can only handle one active event at a time."
-                })
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 1: Reject updates to terminal-state incidents
+        # ═══════════════════════════════════════════════════════════════════
+        TERMINAL_STATES = ['resolved', 'false_alarm', 'closed']
+        if old_instance.status in TERMINAL_STATES:
+            raise ValidationError({
+                "status": f"This incident is already '{old_instance.get_status_display()}' and cannot be modified."
+            })
         
-        # 1. Role-based Status Transitions
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 2: Validate status transitions
+        # ═══════════════════════════════════════════════════════════════════
+        ALLOWED_TRANSITIONS = {
+            'pending':    ['verified', 'false_alarm', 'rejected'],
+            'verified':   ['responding', 'resolved', 'false_alarm'],
+            'responding': ['resolved', 'false_alarm'],
+        }
+        
         if new_status and new_status != old_instance.status:
-            # Attendees CANNOT verify or resolve incidents
-            if user.role == 'attendee' and new_status in ['verified', 'responding', 'resolved', 'false_alarm', 'closed']:
-                raise permissions.exceptions.PermissionDenied("Attendees cannot change incident status.")
+            allowed = ALLOWED_TRANSITIONS.get(old_instance.status, [])
+            if new_status not in allowed:
+                raise ValidationError({
+                    "status": f"Cannot transition from '{old_instance.status}' to '{new_status}'. Allowed: {allowed}"
+                })
             
-            # Volunteers can Respond and Resolve
-            if user.role == 'volunteer' and new_status == 'closed':
-                # Only organizers can Close/Archive
-                raise permissions.exceptions.PermissionDenied("Only organizers can close/archive incidents.")
-
+            # Role-based restrictions
+            if user.role == 'attendee':
+                raise PermissionDenied("Attendees cannot change incident status.")
+            if user.role == 'volunteer' and new_status in ['closed', 'false_alarm']:
+                raise PermissionDenied("Only organizers can mark incidents as false alarm or close them.")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 3: Volunteer assignment validation
+        # ═══════════════════════════════════════════════════════════════════
+        if assigned_volunteer_id:
+            assigned_volunteer_id = int(assigned_volunteer_id)
+            old_volunteer_id = old_instance.assigned_volunteer_id
+            
+            if assigned_volunteer_id != old_volunteer_id:
+                try:
+                    volunteer = User.objects.get(id=assigned_volunteer_id)
+                except User.DoesNotExist:
+                    raise ValidationError({"assigned_volunteer": "Volunteer not found."})
+                
+                # Scope check: Allow any certified volunteer/authority to be assigned
+                valid_roles = ['volunteer', 'authority', 'admin']
+                if volunteer.role not in valid_roles:
+                    raise ValidationError({
+                        "assigned_volunteer": f"User '{volunteer.full_name}' is not in a responder role ({volunteer.role})."
+                    })
+                
+                if not volunteer.is_active:
+                    raise ValidationError({
+                        "assigned_volunteer": "This volunteer account is currently deactivated."
+                    })
+                
+                # Event-level conflict check
+                conflict_info = check_volunteer_active_event_conflict(volunteer, old_instance.event_id)
+                if conflict_info and conflict_info['has_conflict']:
+                    raise ValidationError({
+                        "assigned_volunteer": f"Volunteer is already assigned to {conflict_info['conflicting_event_name']} event."
+                    })
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 4: Build update fields and persist
+        # ═══════════════════════════════════════════════════════════════════
         update_fields = {}
-        if new_status == 'verified' and not old_instance.verified_at:
-            update_fields['verified_at'] = timezone.now()
-        elif new_status == 'resolved' and not old_instance.resolved_at:
-            update_fields['resolved_at'] = timezone.now()
-        elif new_status == 'closed' and not old_instance.closed_at:
-            update_fields['closed_at'] = timezone.now()
-            update_fields['is_active'] = False
-
+        
+        if new_status and new_status != old_instance.status:
+            update_fields['status'] = new_status
+            
+            if new_status == 'verified' and not old_instance.verified_at:
+                update_fields['verified_at'] = timezone.now()
+            elif new_status in ['resolved', 'false_alarm']:
+                update_fields['resolved_at'] = timezone.now()
+                update_fields['is_active'] = False
+            elif new_status == 'closed':
+                update_fields['closed_at'] = timezone.now()
+                update_fields['is_active'] = False
+        
         incident = serializer.save(**update_fields)
         
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 5: Verify DB persistence (debug guarantee)
+        # ═══════════════════════════════════════════════════════════════════
+        db_check = Incident.objects.get(pk=incident.pk)
+        logger.info(f"[INCIDENT_UPDATE] ID={incident.pk} | DB status={db_check.status} | DB is_active={db_check.is_active} | by {user.full_name}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 6: Notifications
+        # ═══════════════════════════════════════════════════════════════════
+        if old_instance.status != incident.status:
+            # Always notify reporter
+            send_notification(
+                incident.reporter,
+                "Incident Status Update",
+                f"Your report '{incident.title}' has been marked as: {incident.get_status_display()}.",
+                'incident',
+                incident.event
+            )
+            
+            # Notify assigned volunteer if someone else changed status
+            if incident.assigned_volunteer and incident.assigned_volunteer != user:
+                send_notification(
+                    incident.assigned_volunteer,
+                    "Incident Managed",
+                    f"The incident you were assigned to ({incident.title}) is now {incident.get_status_display()}.",
+                    'incident',
+                    incident.event
+                )
+            
+            # Notify organizers if a volunteer resolved it
+            if user.role == 'volunteer':
+                organizers = User.objects.filter(role__in=['organizer', 'admin'])
+                for org in organizers:
+                    send_notification(
+                        org,
+                        "Incident Protocol Update",
+                        f"Volunteer {user.full_name} has marked '{incident.title}' as {incident.get_status_display()}.",
+                        'incident',
+                        incident.event
+                    )
+
+        # Notification for assignment changes
         if old_instance.assigned_volunteer != incident.assigned_volunteer and incident.assigned_volunteer:
             send_notification(
                 incident.assigned_volunteer,
@@ -464,22 +577,17 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 'assignment',
                 incident.event
             )
-        
-        if old_instance.status != incident.status:
-            send_notification(
-                incident.reporter,
-                f"Update: {incident.title}",
-                f"Your report status is now: {incident.get_status_display()}.",
-                'incident',
-                incident.event
-            )
 
+        # ═══════════════════════════════════════════════════════════════════
+        # BLOCK 7: Audit log
+        # ═══════════════════════════════════════════════════════════════════
         log_incident_action(
             incident, 
             'status_change' if old_instance.status != incident.status else 'updated', 
             user, 
             previous_status=old_instance.status,
-            new_status=incident.status
+            new_status=incident.status,
+            notes=f"Status changed from {old_instance.status} to {incident.status} by {user.full_name} ({user.role})"
         )
         self.broadcast_incident(incident, 'update_incident')
 
@@ -496,6 +604,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'entity_type': 'incident',
             'action': action,
             'id': incident.id,
+            'event_id': incident.event_id,
             'title': incident.title,
             'category': incident.category,
             'category_display': incident.get_category_display(),
@@ -506,6 +615,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'status': incident.status,
             'status_display': incident.get_status_display(),
             'description': incident.description,
+            'reporter_name': incident.reporter.full_name if incident.reporter else None,
             'parent_incident': incident.parent_incident_id,
             'assigned_volunteer_id': incident.assigned_volunteer.id if incident.assigned_volunteer else None,
             'assigned_volunteer_name': incident.assigned_volunteer.full_name if incident.assigned_volunteer else None,
@@ -524,9 +634,11 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
     from django.db import transaction
 
     def get_queryset(self):
-        # Filter out resolved and cancelled SOS alerts to prevent stale notifications
-        # Only show active SOS alerts (reported, assigned, in_progress)
-        return self.queryset.exclude(status__in=['resolved', 'cancelled']).order_by('-created_at')
+        # For list views: only show active SOS alerts (reported, assigned, in_progress)
+        # For detail views (retrieve, update, delete): allow access to all SOS by ID
+        if self.action == 'list':
+            return self.queryset.exclude(status__in=['resolved', 'cancelled']).order_by('-created_at')
+        return self.queryset.all()
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -609,13 +721,14 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             logger.error(f"[METRICS_ERROR] Failed to log SOS acceptance metrics: {e}")
         
         # Notify the Attendee
-        send_notification(
-            sos.user,
-            "Help is on the way!",
-            f"Your SOS has been accepted by volunteer {user.full_name}. They are responding now.",
-            'sos',
-            sos.event
-        )
+        if sos.user:
+            send_notification(
+                sos.user,
+                "SOS Sent",
+                f"{sos.user.full_name} is sending sos alert to {user.full_name}",
+                'sos',
+                sos.event
+            )
 
         log_sos_action(
             sos_alert=sos,
@@ -743,6 +856,18 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"SOS Dispatch Broadcast failed: {e}")
                 
+            # ✅ Notify Attendee about Manual Dispatch
+            if sos.user:
+                try:
+                    send_notification(
+                        sos.user,
+                        "SOS Sent",
+                        f"{sos.user.full_name} is sending sos alert to {nearest_volunteer.full_name}",
+                        'sos',
+                        sos.event
+                    )
+                except Exception as e:
+                    print(f"Attendee Dispatch Notification failed: {e}")
             return Response({
                 "success": True, 
                 "message": f"Successfully dispatched to {nearest_volunteer.full_name}",
@@ -768,7 +893,7 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             "message": "SOS alert marked as read",
             "id": sos.id,
             "is_read": sos.is_read
-        }, status=status.HTTP_200_OK)
+        }, status=200)
 
     def perform_create(self, serializer):
         try:
@@ -826,7 +951,13 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
 
             # ✅ NEW: Notify attendee their SOS was sent
             try:
-                send_notification(user, "SOS Sent", "Your emergency alert has been sent. Help is on the way.", 'sos', sos.event)
+                if nearby_volunteers:
+                    nearest_v = nearby_volunteers[0][0]
+                    msg = f"{user.full_name} is sending sos alert to {nearest_v.full_name}"
+                else:
+                    msg = f"{user.full_name} is sending sos alert to organizers"
+                
+                send_notification(user, "SOS Sent", msg, 'sos', sos.event)
             except Exception as e:
                 print(f"[WARN] Attendee SOS notification failed: {e}")
 
@@ -939,30 +1070,124 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
         return nearest
 
     def perform_update(self, serializer):
+        """
+        UNIFIED SOS update handler.
+        Handles: manual volunteer assignment, status changes, notifications, broadcasting.
+        """
+        user = self.request.user
         old_instance = SOSAlert.objects.get(pk=serializer.instance.pk)
         old_status = old_instance.status
+        new_status = self.request.data.get('status')
+        assigned_volunteer_id = self.request.data.get('assigned_volunteer')
         
-        sos = serializer.save()
+        update_fields = {}
         
+        # 1. Handle status change
+        if new_status and new_status != old_status:
+            update_fields['status'] = new_status
+            
+            # Set resolved_at timestamp
+            if new_status == 'resolved':
+                update_fields['resolved_at'] = timezone.now()
+                update_fields['is_active'] = False
+        
+        # 2. Handle Manual Volunteer Assignment
+        if assigned_volunteer_id:
+            assigned_volunteer_id = int(assigned_volunteer_id)
+            old_volunteer_id = old_instance.assigned_volunteer_id
+            
+            if assigned_volunteer_id != old_volunteer_id:
+                try:
+                    volunteer = User.objects.get(id=assigned_volunteer_id)
+                except User.DoesNotExist:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({"assigned_volunteer": "Volunteer not found."})
+                
+                # Scope check: volunteer must be in same event
+                volunteer_in_event = ResponderLocation.objects.filter(
+                    user=volunteer,
+                    event_id=old_instance.event_id,
+                    is_active=True
+                ).exists()
+                
+                if not volunteer_in_event:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({
+                        "assigned_volunteer": "Volunteer must be assigned to the same event as this SOS alert."
+                    })
+                
+                # Event-level conflict check
+                conflict_info = check_volunteer_active_event_conflict(volunteer, old_instance.event_id)
+                if conflict_info and conflict_info['has_conflict']:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({
+                        "assigned_volunteer": f"Volunteer is already assigned to {conflict_info['conflicting_event_name']} event."
+                    })
+                
+                update_fields['assigned_volunteer'] = volunteer
+                # Auto-set status to 'assigned' if currently 'reported'
+                if not new_status or old_status == 'reported':
+                    update_fields['status'] = 'assigned'
+        
+        # 3. Save with all computed fields
+        sos = serializer.save(**update_fields)
+        
+        # 4. Notifications for volunteer assignment
+        if old_instance.assigned_volunteer != sos.assigned_volunteer and sos.assigned_volunteer:
+            # Notify the assigned volunteer
+            send_notification(
+                sos.assigned_volunteer,
+                "URGENT: SOS Assignment",
+                f"You have been manually assigned to an SOS from {sos.user.full_name} at {sos.location_name or 'the venue'}.",
+                'sos',
+                sos.event
+            )
+            
+            # Notify the attendee who sent the SOS
+            if sos.user:
+                send_notification(
+                    sos.user,
+                    "Help Dispatched",
+                    f"{sos.user.full_name} is sending sos alert to {sos.assigned_volunteer.full_name}",
+                    'sos',
+                    sos.event
+                )
+            
+            log_sos_action(
+                sos_alert=sos,
+                action_type='assigned',
+                performed_by=user,
+                new_status=sos.status,
+                notes=f"SOS manually assigned to {sos.assigned_volunteer.full_name} by {user.full_name}."
+            )
+        
+        # 5. Log status changes
         if old_status != sos.status:
             log_sos_action(
                 sos_alert=sos,
                 action_type=sos.status if sos.status in ['assigned', 'en_route', 'arrived', 'resolved'] else 'status_change',
-                performed_by=self.request.user,
+                performed_by=user,
                 previous_status=old_status,
                 new_status=sos.status,
-                notes=f"SOS Status changed to {sos.status}."
+                notes=f"SOS status changed from {old_status} to {sos.status} by {user.full_name}."
             )
             
-            # 🎯 LOG COMPLETION: When SOS is fully resolved, log total response time
+            # Log completion metrics when resolved
             if sos.status == 'resolved':
-                completion_seconds = (timezone.now() - sos.created_at).total_seconds()
-                sos_metrics.log_sos_completed(
-                    sos_id=sos.id,
-                    completion_seconds=completion_seconds
-                )
-            
-        self.broadcast_sos(sos, 'update_sos')
+                try:
+                    completion_seconds = (timezone.now() - sos.created_at).total_seconds()
+                    sos_metrics.log_sos_completed(
+                        sos_id=sos.id,
+                        completion_seconds=completion_seconds
+                    )
+                except Exception as e:
+                    logger.error(f"SOS metrics logging failed: {e}")
+        
+        # 6. Broadcast to all relevant parties
+        try:
+            self.broadcast_sos(sos, 'update_sos')
+        except Exception as e:
+            logger.error(f"SOS Update Broadcast failed: {e}")
 
     def broadcast_sos(self, sos, action):
         """
@@ -985,6 +1210,7 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             'entity_type': 'sos',
             'action': action,
             'id': sos.id,
+            'event_id': sos.event_id,
             'user_id': sos.user.id,
             'user_name': sos.user.full_name,
             'user_phone': getattr(sos.user, 'phone_number', 'N/A'),
@@ -995,6 +1221,7 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             'sos_type_display': sos.get_sos_type_display(),
             'status': sos.status,
             'priority': sos.priority,
+            'created_at': sos.created_at.isoformat() if sos.created_at else None,
             'assigned_volunteer_id': sos.assigned_volunteer.id if sos.assigned_volunteer else None,
             'assigned_volunteer_name': sos.assigned_volunteer.full_name if sos.assigned_volunteer else None,
         }

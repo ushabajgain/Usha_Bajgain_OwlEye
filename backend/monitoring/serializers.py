@@ -25,12 +25,15 @@ class IncidentSerializer(serializers.ModelSerializer):
         read_only_fields = ['reporter', 'created_at', 'verified_at', 'resolved_at', 'closed_at', 'is_active']
 
 class SOSAlertSerializer(serializers.ModelSerializer):
+    user_name = serializers.ReadOnlyField(source='user.full_name')
+    assigned_volunteer_name = serializers.ReadOnlyField(source='assigned_volunteer.full_name')
+    
     class Meta:
         model = SOSAlert
         fields = [
-            'id', 'event', 'user', 'location_data', 'latitude', 'longitude', 'gps_accuracy', 
+            'id', 'event', 'user', 'user_name', 'location_data', 'latitude', 'longitude', 'gps_accuracy', 
             'location_name', 'sos_type', 'status', 
-            'priority', 'assigned_volunteer', 'is_active', 'is_read', 'created_at', 'resolved_at'
+            'priority', 'assigned_volunteer', 'assigned_volunteer_name', 'is_active', 'is_read', 'created_at', 'resolved_at'
         ]
         read_only_fields = ['user', 'created_at', 'resolved_at']
 

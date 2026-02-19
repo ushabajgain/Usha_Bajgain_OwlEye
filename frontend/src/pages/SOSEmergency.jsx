@@ -260,9 +260,9 @@ const SOSEmergency = () => {
                                 </div>
                                 
                                 {/* ✅ Countdown before allowing another SOS */}
-                                <div style={{ marginTop: 32, padding: 16, background: '#f0fdf4', borderRadius: 12, border: '1px solid #bbf7d0' }}>
-                                    <p style={{ fontSize: 13, color: '#166534', fontWeight: 700, margin: 0 }}>
-                                        Next SOS available in: <span style={{ fontSize: 20, fontWeight: 900 }}>{countdown}s</span>
+                                <div style={{ marginTop: 32, padding: 16, border: '1px solid #bbf7d0', borderRadius: 12 }}>
+                                    <p style={{ fontSize: 13, color: '#166534', fontWeight: 800, margin: 0 }}>
+                                        Next SOS available in: <span style={{ fontSize: 24, fontWeight: 950 }}>{countdown}s</span>
                                     </p>
                                 </div>
                                 
@@ -271,16 +271,15 @@ const SOSEmergency = () => {
                                         onClick={() => setStatus('idle')} 
                                         disabled={countdown > 0}
                                         style={{ 
-                                            background: countdown > 0 ? '#e5e7eb' : 'none', 
+                                            background: 'transparent', 
                                             border: 'none', 
-                                            color: countdown > 0 ? '#9ca3af' : TEXT_MID, 
-                                            fontWeight: 700, 
+                                            color: countdown > 0 ? '#475569' : ACCENT, 
+                                            fontWeight: 800, 
                                             fontSize: 14, 
                                             cursor: countdown > 0 ? 'not-allowed' : 'pointer', 
                                             textDecoration: countdown > 0 ? 'none' : 'underline',
-                                            opacity: countdown > 0 ? 0.6 : 1
                                         }}>
-                                        {countdown > 0 ? 'Waiting to reset...' : 'Reset Form'}
+                                        {countdown > 0 ? 'Waiting to reset...' : 'Reset Form Now'}
                                     </button>
                                 </div>
                             </div>

@@ -60,7 +60,7 @@ export const getDisplayNotifications = (notifications = [], sosAlerts = {}) => {
         message: n.message || '',
         created_at: n.created_at,
         is_read: n.is_read || false,
-        intent: NOTIFICATION_INTENT.INFO,
+        intent: String(n.notification_type).toLowerCase() === 'sos' ? NOTIFICATION_INTENT.ALERT : NOTIFICATION_INTENT.INFO,
         notification_type: n.notification_type,
         user_id: n.user_id,
         event_id: n.event_id,
@@ -78,7 +78,9 @@ export const getDisplayNotifications = (notifications = [], sosAlerts = {}) => {
         type: 'sos',
         dbId: sos.id,
         title: `SOS: ${sos.sos_type_display || 'Emergency'}`,
-        message: sos.message || 'Emergency alert',
+        message: sos.user_name 
+          ? `${sos.user_name} sent an SOS alert${sos.assigned_volunteer_name ? ` to ${sos.assigned_volunteer_name}` : ''}`
+          : (sos.message || 'Emergency alert'),
         created_at: sos.created_at,
         is_read: sos.is_read || false,
         intent: NOTIFICATION_INTENT.ALERT,

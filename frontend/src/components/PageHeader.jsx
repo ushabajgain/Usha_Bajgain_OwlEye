@@ -135,13 +135,13 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
         },
         badge: {
             position: 'absolute',
-            top: 10,
-            right: 10,
+            top: -2,
+            right: -2,
             width: 8,
             height: 8,
             borderRadius: '50%',
             background: '#0EA5E9', // Sky blue like the picture
-            border: '1.5px solid #F8FAFC',
+            border: '2px solid #F8FAFC',
         },
         divider: {
             width: 1,
@@ -266,7 +266,6 @@ const PageHeader = ({ title, subtitle, breadcrumb, breadcrumbPath = '/organizer/
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 color: '#fff',
-                                border: '1.5px solid #F8FAFC',
                                 padding: notificationBadge > 9 ? '2px 4px' : 0
                             }}>
                                 {notificationBadge > 9 ? '9+' : notificationBadge}

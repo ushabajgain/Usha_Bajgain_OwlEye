@@ -103,9 +103,9 @@ const NotificationsPage = () => {
             case 'unread':
                 return displayList.filter(n => !n.isRead);
             case 'sos':
-                return displayList.filter(n => n.type === 'sos');
+                return displayList.filter(n => n.type === 'sos' || String(n.intent) === 'alert');
             case 'notifications':
-                return displayList.filter(n => n.type === 'notification');
+                return displayList.filter(n => n.type === 'notification' && String(n.intent) !== 'alert');
             default:
                 return displayList;
         }
@@ -133,46 +133,14 @@ const NotificationsPage = () => {
     };
 
     const handleNotificationClick = async (item) => {
-        try {
-            // Navigate based on notification type and user role
-            if (item.type === 'sos') {
-                // Navigate to appropriate SOS page based on role
-                if (role === 'attendee') {
-                    navigate('/attendee/sos');
-                } else if (role === 'volunteer') {
-                    navigate('/volunteer/sos');
-                } else if (role === 'organizer') {
-                    navigate(`/organizer/sos?id=${item.dbId}`);
-                } else if (role === 'admin') {
-                    navigate('/admin/sos');
-                }
-            } else if (item.type === 'notification') {
-                // Navigate based on notification type
-                const notifType = item.notification_type;
-                if (notifType === 'incident') {
-                    if (role === 'organizer' || role === 'admin') {
-                        navigate(`/organizer/incident/${item.incident_id || item.dbId}`);
-                    } else if (role === 'volunteer') {
-                        navigate('/volunteer/assigned');
-                    }
-                } else if (notifType === 'event') {
-                    navigate(`/events/${item.event_id}`);
-                } else if (notifType === 'ticket') {
-                    navigate('/bookings');
-                } else {
-                    // Default: stay on notifications page
-                    navigate('/notifications');
-                }
-            }
+        if (item.isRead) return; // Do nothing if already read
 
-            // Delay marking as read for better UX
-            setTimeout(async () => {
-                if (item.type === 'sos') {
-                    await markSOSAsRead(item.dbId);
-                } else if (item.type === 'notification') {
-                    await markAsRead(item.dbId);
-                }
-            }, 200);
+        try {
+            if (item.type === 'sos') {
+                await markSOSAsRead(item.dbId);
+            } else if (item.type === 'notification') {
+                await markAsRead(item.dbId);
+            }
         } catch (err) {
             setError('Failed to mark notification as read');
         }
@@ -213,26 +181,42 @@ const NotificationsPage = () => {
                     </div>
 
                     {/* Filter Tabs */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-                        {['all', 'unread', 'sos', 'notifications'].map(f => (
-                            <button
-                                key={f}
-                                onClick={() => setFilter(f)}
-                                style={{
-                                    padding: '8px 16px',
-                                    borderRadius: 8,
-                                    border: 'none',
-                                    background: filter === f ? ACCENT : ACCENT + '10',
-                                    color: filter === f ? '#fff' : ACCENT,
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    textTransform: 'capitalize'
-                                }}
-                            >
-                                {f === 'notifications' ? 'Notifications' : f}
-                            </button>
-                        ))}
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 28, overflowX: 'auto', paddingBottom: 4 }}>
+                        {[
+                            { id: 'all', label: 'All Alerts' },
+                            { id: 'unread', label: 'Unread' },
+                            { id: 'sos', label: 'SOS', color: '#ef4444' }, // Red for SOS
+                            { id: 'notifications', label: 'Incidents', color: '#3b82f6' } // Blue for plain incidents
+                        ].map(f => {
+                            const isActive = filter === f.id;
+                            const activeColor = f.color || ACCENT;
+                            return (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setFilter(f.id)}
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: 20,
+                                        border: `1.5px solid ${isActive ? activeColor : BORDER}`,
+                                        background: isActive ? activeColor : 'transparent',
+                                        color: isActive ? '#fff' : TEXT_MID,
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        transition: 'all 0.2s ease',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {!isActive && f.color && (
+                                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: f.color }} />
+                                    )}
+                                    {f.label}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* Loading State */}

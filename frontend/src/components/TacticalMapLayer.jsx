@@ -105,7 +105,7 @@ const TacticalMapLayer = ({ eventId }) => {
                 if (data.entity_type === 'incident') {
                     setEntities(prev => {
                         const filtered = prev.incidents.filter(i => i.id !== data.id);
-                        if (data.status === 'resolved' || data.status === 'false') return { ...prev, incidents: filtered };
+                        if (data.status === 'resolved' || data.status === 'false_alarm') return { ...prev, incidents: filtered };
                         return { ...prev, incidents: [data, ...filtered] };
                     });
                 } else if (data.entity_type === 'sos') {

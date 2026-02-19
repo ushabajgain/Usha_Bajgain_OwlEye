@@ -29,7 +29,6 @@ import UserManagement from './pages/UserManagement';
 import EventManagement from './pages/EventManagement';
 import IncidentControlCenter from './pages/IncidentControlCenter';
 import SOSMonitoringCenter from './pages/SOSMonitoringCenter';
-import VolunteerManagement from './pages/VolunteerManagement';
 import GlobalFinances from './pages/GlobalFinances';
 import GlobalAuditLogs from './pages/GlobalAuditLogs';
 import Notifications from './pages/Notifications';
@@ -45,11 +44,13 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LocationTracker from './components/LocationTracker';
 import SafetyAlertListener from './components/SafetyAlertListener';
 import { SafetySocketProvider } from './context/SafetySocketContext';
+import { FeedbackProvider } from './context/FeedbackContext';
 
 function App() {
   return (
-    <SafetySocketProvider eventId="1">
-      <Router>
+    <FeedbackProvider>
+      <SafetySocketProvider eventId="1">
+        <Router>
         <LocationTracker />
         <SafetyAlertListener />
         <Routes>
@@ -97,7 +98,7 @@ function App() {
           <Route path="/admin/events" element={<ProtectedRoute allowedRoles={['admin']}><EventManagement /></ProtectedRoute>} />
           <Route path="/admin/incidents" element={<ProtectedRoute allowedRoles={['admin']}><IncidentControlCenter /></ProtectedRoute>} />
           <Route path="/admin/sos" element={<ProtectedRoute allowedRoles={['admin']}><SOSMonitoringCenter /></ProtectedRoute>} />
-          <Route path="/admin/volunteers" element={<ProtectedRoute allowedRoles={['admin']}><VolunteerManagement /></ProtectedRoute>} />
+          <Route path="/admin/volunteers" element={<ProtectedRoute allowedRoles={['admin']}><VolunteersList /></ProtectedRoute>} />
           <Route path="/admin/finances" element={<ProtectedRoute allowedRoles={['admin']}><GlobalFinances /></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><GlobalAuditLogs /></ProtectedRoute>} />
 
@@ -106,6 +107,7 @@ function App() {
         </Routes>
       </Router>
     </SafetySocketProvider>
+    </FeedbackProvider>
   );
 }
 

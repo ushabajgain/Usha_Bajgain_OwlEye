@@ -218,7 +218,6 @@ const Settings = () => {
                         <div style={s.tabs}>
                             <button style={s.tabBtn(activeTab === 'basic')} onClick={() => setActiveTab('basic')}><User size={18} /> Basic Information</button>
                             <button style={s.tabBtn(activeTab === 'password')} onClick={() => setActiveTab('password')}><Lock size={18} /> Password</button>
-                            <button style={s.tabBtn(activeTab === 'privacy')} onClick={() => setActiveTab('privacy')}><Eye size={18} /> Privacy & Tracking</button>
                         </div>
                         <div style={s.content}>
                             {message.text && (
@@ -227,39 +226,7 @@ const Settings = () => {
                                     {message.text}
                                 </div>
                             )}
-                            {activeTab === 'privacy' ? (
-                                <div style={{ maxWidth: 600 }}>
-                                    <h2 style={s.formTitle}>Privacy & Location Tracking</h2>
-                                    <p style={{ fontSize: 13, color: C.textSecondary, lineHeight: 1.6, marginBottom: 24 }}>
-                                        OwlEye utilizes background location services to keep you safe during the event, enabling organizers to spot crowd crushes and dispatch medical volunteers instantly. Your location data is fully anonymized to other regular attendees.
-                                    </p>
-                                    
-                                    <div style={{ padding: 20, borderRadius: 12, border: `1px solid ${C.border}`, background: isTrackingEnabled ? '#f0fdf4' : '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.3s' }}>
-                                        <div>
-                                            <h3 style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, margin: '0 0 4px 0' }}>Real-time Safety Telemetry</h3>
-                                            <p style={{ fontSize: 12, color: C.textSecondary, margin: 0 }}>
-                                                {isTrackingEnabled ? "Satellite tracking is active. You are visible to safety personnel." : "Tracking is paused. You cannot be located during an SOS."}
-                                            </p>
-                                        </div>
-                                        <button 
-                                            onClick={() => {
-                                                const newVal = !isTrackingEnabled;
-                                                setIsTrackingEnabled(newVal);
-                                                localStorage.setItem('is_tracking_enabled', newVal ? 'true' : 'false');
-                                                window.dispatchEvent(new CustomEvent('tracking_preference_changed', { detail: newVal }));
-                                                setMessage({ type: 'success', text: newVal ? 'Location tracking enabled.' : 'Location tracking paused completely.' });
-                                                setTimeout(() => setMessage({ type: '', text: '' }), 4000);
-                                            }}
-                                            style={{
-                                                padding: '10px 20px', borderRadius: 30, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
-                                                background: isTrackingEnabled ? C.danger : C.primary, color: '#fff', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                                            }}
-                                        >
-                                            {isTrackingEnabled ? "Pause Tracking" : "Start Sharing Location"}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : activeTab === 'basic' ? (
+                            {activeTab === 'basic' ? (
                                 <form onSubmit={handleProfileSubmit}>
                                     <div style={s.grid}>
                                         <div>

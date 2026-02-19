@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { MapContainer, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -7,12 +8,22 @@ import 'leaflet.heat';
 import 'leaflet.markercluster';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import api from '../utils/api';
-import { Loader2, LocateFixed, Users, AlertTriangle, Search, Globe } from 'lucide-react';
-import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
-import { getRole, getUserId } from '../utils/auth';
+import api from '../utils/api';
+import C from '../utils/colors';
+import { getRole } from '../utils/auth';
 import { useSafetySocket } from '../hooks/useSafetySocket';
+import { Loader2, LocateFixed, Search, Globe } from 'lucide-react';
+import { useMap } from 'react-leaflet';
+
+// Map layer components
+import IncidentMarkers from '../components/map/IncidentMarkers';
+import SOSMarkers from '../components/map/SOSMarkers';
+import VolunteerMarkers from '../components/map/VolunteerMarkers';
+import AttendeeLayer from '../components/map/AttendeeLayer';
+import RiskZoneLayer from '../components/map/RiskZoneLayer';
+import LayerControls from '../components/map/LayerControls';
+import EventBoundaries from '../components/map/EventBoundaries';
 
 const CONTENT_BG = C.background;
 const ACCENT = C.primary;
@@ -20,442 +31,185 @@ const TEXT_DARK = C.textPrimary;
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
-const UserMarkerIcon = (pic, bg, status = null) => {
-    let statusColor = '#10b981'; // Default available
-    if (status === 'responding') statusColor = '#f59e0b';
-    if (status === 'busy') statusColor = '#6366f1';
-    
-    // Fallback safe URL
-    const safePic = pic && pic !== 'null' ? pic : 'https://ui-avatars.com/api/?name=User&background=random';
-    
-    const statusDot = status ? `
-        <div style="position: absolute; top: 0; right: 0; width: 12px; height: 12px; border-radius: 50%; background: ${statusColor}; border: 2px solid white; z-index: 5; box-shadow: 0 0 4px rgba(0,0,0,0.2);"></div>
-    ` : '';
-
-    return L.divIcon({
-        html: `
-        <div style="position: relative; width: 40px; height: 40px;">
-            ${statusDot}
-            <div style="position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 15px solid ${bg || '#ef4444'};"></div>
-            <img src="${safePic}" style="width: 40px; height: 40px; border-radius: 50%; border: 3px solid ${bg || '#ef4444'}; object-fit: cover; background: white; position: relative; z-index: 2;" />
-        </div>`,
-        className: '',
-        iconSize: [40, 48],
-        iconAnchor: [20, 48],
-        popupAnchor: [0, -48]
-    });
+/* ─────────────────────────────────────────────────────────
+   FlyToHandler — Imperatively flies map to a target
+   ───────────────────────────────────────────────────────── */
+const FlyToHandler = ({ target }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (target && target.lat && target.lng) {
+            map.flyTo([target.lat, target.lng], target.zoom || 18, { duration: 0.8 });
+        }
+    }, [target, map]);
+    return null;
 };
 
-const SimpleIcon = (color) => L.divIcon({
-    html: `<div style="width: 16px; height: 16px; border-radius: 50%; background: ${color}; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.4);"></div>`,
-    className: '',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-    popupAnchor: [0, -8]
-});
-
+/* ═════════════════════════════════════════════════════════
+   MAIN COMPONENT: LiveMap
+   Shows ALL events with boundaries, incidents, SOS, volunteers
+   ═════════════════════════════════════════════════════════ */
 const LiveMap = () => {
     const { id: eventId } = useParams();
     const navigate = useNavigate();
-    const location = useLocation();
+    const routerLocation = useLocation();
+
+    // ── State ──
     const [targetEventId, setTargetEventId] = useState(eventId || '1');
+    const [allEvents, setAllEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [mapSearch, setMapSearch] = useState('');
+    const [flyTarget, setFlyTarget] = useState(null);
 
+    // Layer visibility toggles
+    const [layers, setLayers] = useState({
+        volunteers: true,
+        incidents: true,
+        sos: true,
+        heatmap: true,
+        attendees: false,
+        riskZones: true,
+        boundaries: true
+    });
+
+    // ── Data from SafetySocket context (real-time) ──
+    const {
+        locations: users,
+        incidents,
+        sosAlerts: sos,
+        isConnected,
+        loading: contextLoading
+    } = useSafetySocket(targetEventId);
+
+    // ── Init: fetch ALL events, resolve default event ──
     useEffect(() => {
         const init = async () => {
             const role = getRole();
-            if (!['organizer', 'admin', 'volunteer'].includes(role)) { navigate('/events'); return; }
-
-            // If no eventId in URL, fetch fallback
-            if (!eventId && !targetEventId) {
-                try {
-                    const res = await api.get('/events/');
-                    if (res.data && res.data.length > 0) {
-                        setTargetEventId(res.data[0].id.toString());
-                    } else {
-                        setTargetEventId('1');
-                    }
-                } catch (err) {
-                    console.error("LiveMap: Failed to fetch fallback events", err);
-                    setTargetEventId('1');
-                }
+            if (!['organizer', 'admin', 'volunteer'].includes(role)) {
+                navigate('/events');
+                return;
             }
-            setLoading(false);
-        };
-        init();
 
-        const timer = setTimeout(() => {
-            setLoading(false);
-        }, 3500);
-
-        return () => clearTimeout(timer);
-    }, [eventId, targetEventId, navigate]);
-    
-    const findNearestVolunteer = (lat, lng) => {
-        const volunteers = Object.values(users).filter(u => u.role === 'volunteer');
-        if (volunteers.length === 0) return null;
-        
-        let nearest = null;
-        let minDist = Infinity;
-        
-        volunteers.forEach(v => {
-            const dist = Math.sqrt(Math.pow(v.lat - lat, 2) + Math.pow(v.lng - lng, 2));
-            if (dist < minDist) {
-                minDist = dist;
-                nearest = v;
-            }
-        });
-        return nearest;
-    };
-    
-    const { 
-        locations: users, 
-        incidents, 
-        sosAlerts: sos, 
-        isConnected, 
-        loading: contextLoading,
-        updateEventId 
-    } = useSafetySocket(targetEventId);
-
-    const mapRef = useRef(null);
-    const [mapInstance, setMapInstance] = useState(null);
-    const markerClusterGroup = useRef(null);
-    const heatLayer = useRef(null);
-    const incidentMarkers = useRef({});
-    const sosMarkers = useRef({});
-    const userMarkers = useRef({});
-
-    useEffect(() => {
-        if (loading || !mapRef.current || mapInstance) return;
-
-        const startPos = location.state?.lat && location.state?.lng 
-            ? [location.state.lat, location.state.lng] 
-            : [27.7172, 85.3240];
-        const startZoom = location.state?.zoom || 15;
-
-        const map = L.map(mapRef.current, { 
-            center: startPos, 
-            zoom: startZoom,
-            zoomControl: true,
-            attributionControl: false 
-        });
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        // Cluster Group
-        markerClusterGroup.current = L.markerClusterGroup({
-            chunkedLoading: true,
-            maxClusterRadius: zoom => zoom < 15 ? 80 : 40,
-            disableClusteringAtZoom: 18,
-            showCoverageOnHover: false
-        }).addTo(map);
-
-        // Heat Layer (Crowd Density)
-        heatLayer.current = L.heatLayer([], {
-            radius: 35,
-            blur: 25,
-            maxZoom: 18,
-            gradient: { 0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red' }
-        }).addTo(map);
-
-        // Risk Zone Layer Group
-        window.riskLayerGroup = L.layerGroup().addTo(map);
-
-        setMapInstance(map);
-
-        return () => {
-            if (map) {
-                map.remove();
-            }
-        };
-    }, [loading]);
-
-    useEffect(() => {
-        if (mapInstance && location.state?.lat && location.state?.lng) {
-            mapInstance.flyTo([location.state.lat, location.state.lng], location.state.zoom || 18);
-        }
-    }, [location.state, mapInstance]);
-
-    // 2. Heatmap Risk Data Polling (Still needed as it's not in global context yet)
-    useEffect(() => {
-        if (loading || !mapInstance || !targetEventId) return;
-
-        window.L = L;
-
-        window.dispatchHelp = (sosId) => {
-            api.get(`/monitoring/sos-alerts/`).then(res => {
-                const s = res.data.find(x => String(x.id) === String(sosId));
-                if (!s) return alert("SOS Alert ended or not found.");
-                
-                api.get(`/monitoring/locations/${targetEventId}/`).then(locRes => {
-                    const currentUsers = {};
-                    locRes.data.forEach(u => currentUsers[u.user_id || u.id] = u);
-                    
-                    const volunteers = Object.values(currentUsers).filter(u => u.role === 'volunteer');
-                    if (volunteers.length === 0) return alert("No rescuers found nearby.");
-                    
-                    let nearest = null;
-                    let minDist = Infinity;
-                    volunteers.forEach(v => {
-                        const dist = Math.sqrt(Math.pow(v.lat - s.lat, 2) + Math.pow(v.lng - s.lng, 2));
-                        if (dist < minDist) { minDist = dist; nearest = v; }
-                    });
-                    
-                    if (nearest) alert(`DISPATCHED: ${nearest.name} is responding to ${s.user_name || 'the user'}'s location.`);
-                });
-            });
-        };
-
-        const fetchHeatmap = async () => {
             try {
-                const res = await api.get(`/monitoring/heatmap/${targetEventId}/`);
-                if (window.riskLayerGroup) {
-                    window.riskLayerGroup.clearLayers();
-                    res.data.forEach(zone => {
-                        if (zone.latitude && zone.longitude) {
-                            const circle = L.circle([zone.latitude, zone.longitude], {
-                                color: zone.color || 'green',
-                                fillColor: zone.color || 'green',
-                                fillOpacity: 0.3,
-                                radius: 100 + (zone.incident_count * 20),
-                                weight: 2
-                            }).addTo(window.riskLayerGroup);
-                            
-                            circle.bindPopup(`
-                                <div style="text-align:center;">
-                                    <b style="color:${zone.color}">${zone.risk_level.toUpperCase()} RISK AREA</b><br/>
-                                    <strong>${zone.location_name}</strong><br/>
-                                    Incidents: ${zone.incident_count}
-                                </div>
-                            `);
+                const res = await api.get('/events/');
+                const events = Array.isArray(res.data) ? res.data : res.data.results || [];
+                setAllEvents(events);
 
-                            const label = L.marker([zone.latitude, zone.longitude], {
-                                icon: L.divIcon({
-                                    className: 'risk-label',
-                                    html: `<div style="color:${zone.color}; font-weight:900; background:rgba(255,255,255,0.8); padding:2px 6px; border-radius:4px; border:1.5px solid ${zone.color}; font-size:10px; white-space:nowrap;">${zone.location_name.split(',')[0]} (Risk: ${zone.risk_level})</div>`,
-                                    iconSize: [0, 0],
-                                    iconAnchor: [-10, 10]
-                                })
-                            }).addTo(window.riskLayerGroup);
-                        }
-                    });
+                // Set target event for WebSocket subscription
+                if (eventId) {
+                    setTargetEventId(eventId);
+                } else if (events.length > 0) {
+                    setTargetEventId(events[0].id.toString());
                 }
-            } catch {}
+            } catch (err) {
+                console.error('[LiveMap] Failed to fetch events:', err);
+            }
+
+            setLoading(false);
         };
 
-        const heatmapInterval = setInterval(fetchHeatmap, 10000); 
-        fetchHeatmap();
+        init();
+    }, [eventId, navigate]);
 
-        return () => {
-            clearInterval(heatmapInterval);
-            delete window.dispatchHelp;
-        };
-    }, [targetEventId, loading, mapInstance]);
-
-    // 3. Update User Markers & Clusters
+    // ── Fly to location if passed via router state ──
     useEffect(() => {
-        if (!markerClusterGroup.current || !heatLayer.current || !mapInstance) return;
-
-        const query = (mapSearch || "").trim().toLowerCase();
-        const activeUsers = Object.values(users);
-        const filteredUsers = query 
-            ? activeUsers.filter(u => (u.name || "").toLowerCase().includes(query))
-            : activeUsers;
-            
-        const heatPoints = [];
-
-        filteredUsers.forEach(user => {
-            const userId = user.user_id;
-            const pos = [user.lat, user.lng];
-            
-            // Marker Update & State Synchronization
-            if (userMarkers.current[userId]) {
-                const marker = userMarkers.current[userId];
-                marker.setLatLng(pos);
-                // Dynamically sync status/visual changes consistently 
-                const newIcon = UserMarkerIcon(
-                    user.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`,
-                    user.role === 'attendee' ? '#f43f5e' : '#3b82f6',
-                    user.role === 'volunteer' ? (user.status || 'available') : null
-                );
-                marker.setIcon(newIcon);
-            } else {
-                const marker = L.marker(pos, {
-                    icon: UserMarkerIcon(
-                        user.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`,
-                        user.role === 'attendee' ? '#f43f5e' : '#3b82f6',
-                        user.role === 'volunteer' ? (user.status || 'available') : null
-                    )
-                });
-
-                const popupHtml = `
-                    <div style="min-width: 200px; padding: 10px;">
-                        <div style="display: flex; gap: 12px; alignItems: center; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
-                            <img src="${user.pic || ''}" style="width:48px; height:48px; border-radius:50%; object-fit:cover; border: 2px solid ${ACCENT};" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}'"/>
-                            <div>
-                                <h4 style="margin:0; font-size:16px; font-weight:800; color: ${TEXT_DARK};">${user.name}</h4>
-                                <p style="margin:0; font-size:12px; color:#64748b; text-transform:capitalize; font-weight: 600;">${user.role}</p>
-                            </div>
-                        </div>
-                        <div style="font-size: 13px; color: #1e293b; line-height: 1.6;">
-                            <p style="margin: 4px 0;"><b>Name:</b> ${user.name}</p>
-                            <p style="margin: 4px 0;"><b>Contact Info:</b> ${user.phone || 'N/A'}</p>
-                            <p style="margin: 4px 0;"><b>Event Name:</b> ${user.event_name || 'OwlEye Event'}</p>
-                            <p style="margin: 4px 0;"><b>Event Venue:</b> ${user.venue_address || 'Main Stadium, KTM'}</p>
-                            <p style="margin: 4px 0;"><b>Last Seen:</b> ${user.last_seen}</p>
-                            <p style="margin: 4px 0;"><b>Active time:</b> ${user.active_time}</p>
-                        </div>
-                    </div>
-                `;
-                marker.bindPopup(popupHtml);
-                markerClusterGroup.current.addLayer(marker);
-                userMarkers.current[userId] = marker;
-            }
-
-            // Heatpoint
-            heatPoints.push([user.lat, user.lng, user.intensity || 1.0]);
-        });
-
-        // O(1) Heatmap Set Lookup Architecture solving O(N^2) CPU locking
-        const activeIds = new Set(filteredUsers.map(u => String(u.user_id)));
-
-        Object.keys(userMarkers.current).forEach(id => {
-            if (!activeIds.has(id)) {
-                markerClusterGroup.current.removeLayer(userMarkers.current[id]);
-                delete userMarkers.current[id];
-            }
-        });
-
-        // Throttle Canvas Thermal Map to avoid freezing core telemetry render loop
-        if (window.heatmapThrottle) clearTimeout(window.heatmapThrottle);
-        window.heatmapThrottle = setTimeout(() => {
-            if (heatLayer.current) heatLayer.current.setLatLngs(heatPoints);
-        }, 2000);
-
-        // Auto-center if only one user matches search and not already zooming
-        if (filteredUsers.length === 1 && query.length > 3) {
-            const u = filteredUsers[0];
-            mapInstance?.setView([u.lat, u.lng], 18);
+        if (routerLocation.state?.lat && routerLocation.state?.lng) {
+            setFlyTarget({
+                lat: routerLocation.state.lat,
+                lng: routerLocation.state.lng,
+                zoom: routerLocation.state.zoom || 18
+            });
         }
-    }, [users, mapSearch, mapInstance]);
+    }, [routerLocation.state]);
 
-    // 4. Update Incidents & SOS
-    useEffect(() => {
-        if (!mapInstance) return;
-
-        const newIncMarkers = {};
-        const newSosMarkers = {};
-
-        // Add current incidents for this event
-        Object.values(incidents).filter(inc => inc.event_id == targetEventId).forEach(inc => {
-            if (!incidentMarkers.current[inc.id]) {
-                const flaggedBadge = inc.is_flagged_reporter 
-                    ? `<div style="margin-top:5px; color:#991b1b; background:#fef2f2; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:700; border:1px solid #fee2e2;">SUSPICIOUS REPORTER - VERIFY CAREFULLY</div>` 
-                    : '';
-                
-                const lat = inc.latitude || inc.lat;
-                const lng = inc.longitude || inc.lng;
-                if (!lat || !lng) return;
-
-                const m = L.marker([lat, lng], { icon: SimpleIcon('#f97316') })
-                    .bindPopup(`
-                        <div style="min-width: 160px;">
-                            <b style="color:#f97316">Incident: ${inc.title}</b><br/>
-                            <p style="margin:4px 0; font-size:12px;">${inc.description || 'No description'}</p>
-                            ${flaggedBadge}
-                        </div>
-                    `)
-                    .addTo(mapInstance);
-                newIncMarkers[inc.id] = m;
-            } else {
-                newIncMarkers[inc.id] = incidentMarkers.current[inc.id];
+    // ── Computed data ──
+    const mapCenter = useMemo(() => {
+        // If navigated to a specific event, center on it
+        if (eventId) {
+            const ev = allEvents.find(e => String(e.id) === String(eventId));
+            if (ev) {
+                const lat = parseFloat(ev.latitude);
+                const lng = parseFloat(ev.longitude);
+                if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
             }
+        }
+        // Otherwise use first event or fallback
+        if (allEvents.length > 0) {
+            const first = allEvents[0];
+            const lat = parseFloat(first.latitude);
+            const lng = parseFloat(first.longitude);
+            if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+        }
+        return [27.7172, 85.3240]; // Kathmandu fallback
+    }, [allEvents, eventId]);
+
+    const validUsers = useMemo(() => {
+        return Object.values(users || {}).filter(u =>
+            u && u.user_id && u.name &&
+            !isNaN(parseFloat(u.lat || u.latitude)) &&
+            !isNaN(parseFloat(u.lng || u.longitude))
+        );
+    }, [users]);
+
+    const filteredPanelUsers = useMemo(() => {
+        const q = (mapSearch || '').trim().toLowerCase();
+        const filtered = validUsers.filter(u =>
+            (u.name || '').toLowerCase().includes(q) ||
+            (u.role || '').toLowerCase().includes(q)
+        );
+        return filtered.sort((a, b) => {
+            const ta = a.last_seen ? new Date(`1970-01-01 ${a.last_seen}`).getTime() : 0;
+            const tb = b.last_seen ? new Date(`1970-01-01 ${b.last_seen}`).getTime() : 0;
+            return tb - ta;
         });
+    }, [validUsers, mapSearch]);
 
-        // Cleanup old incidents
-        Object.keys(incidentMarkers.current).forEach(id => {
-            if (!newIncMarkers[id]) {
-                mapInstance.removeLayer(incidentMarkers.current[id]);
-            }
-        });
-        incidentMarkers.current = newIncMarkers;
+    const attendeeCount = useMemo(() => validUsers.filter(u => u.role === 'attendee').length, [validUsers]);
+    const volunteerCount = useMemo(() => validUsers.filter(u => u.role === 'volunteer').length, [validUsers]);
 
-        // Add SOS
-        Object.values(sos).filter(s => s.event_id == targetEventId).forEach(s => {
-            if (!sosMarkers.current[s.id]) {
-                const nearest = findNearestVolunteer(s.lat || s.latitude, s.lng || s.longitude);
-                const nearestHtml = nearest 
-                    ? `<div style="margin-top:8px; padding:6px; background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; font-size:11px; color:#92400e;">
-                         <strong style="display:block; margin-bottom:2px;">NEAREST RESPONDER</strong>
-                         ${nearest.name} (${nearest.phone || 'N/A'})
-                       </div>`
-                    : `<div style="margin-top:8px; padding:6px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:11px; color:#64748b;">
-                         No responders nearby.
-                       </div>`;
+    // For global map: count ALL incidents/SOS (not filtered by single event)
+    const activeIncidentCount = useMemo(() => {
+        return Object.values(incidents || {}).filter(inc =>
+            ['pending', 'verified', 'responding'].includes(inc.status)
+        ).length;
+    }, [incidents]);
 
-                const lat = s.lat || s.latitude;
-                const lng = s.lng || s.longitude;
-                if (!lat || !lng) return;
+    const activeSosCount = useMemo(() => {
+        return Object.values(sos || {}).filter(s =>
+            s.status !== 'resolved' && s.status !== 'cancelled'
+        ).length;
+    }, [sos]);
 
-                const m = L.marker([lat, lng], { 
-                    icon: L.divIcon({
-                        html: `
-                        <div class="sos-marker-container">
-                            <div class="sos-pulse-ring"></div>
-                            <div class="sos-pulse-ring-inner"></div>
-                            <div class="sos-core"></div>
-                        </div>`,
-                        className: '',
-                        iconSize: [40, 40],
-                        iconAnchor: [20, 20]
-                    })
-                })
-                .bindPopup(`
-                    <div style="min-width: 190px; padding: 4px;">
-                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                            <div style="width:10px; height:10px; border-radius:50%; background:#ef4444; animation: pulse 0.6s infinite alternate;"></div>
-                            <b style="color:#ef4444; font-size:14px; letter-spacing:0.5px;">EMERGENCY SOS</b>
-                        </div>
-                        <div style="font-size:12px; color:#334155; margin-bottom:12px;">
-                            <p style="margin:2px 0;"><strong>Sender:</strong> ${s.user_name}</p>
-                            <p style="margin:2px 0;"><strong>Type:</strong> ${s.sos_type_display}</p>
-                            ${nearestHtml}
-                        </div>
-                    </div>
-                `)
-                .addTo(mapInstance);
-                newSosMarkers[s.id] = m;
-            } else {
-                newSosMarkers[s.id] = sosMarkers.current[s.id];
-            }
-        });
+    // Layer toggle handler
+    const handleToggle = useCallback((key) => {
+        setLayers(prev => ({ ...prev, [key]: !prev[key] }));
+    }, []);
 
-        // Cleanup old SOS
-        Object.keys(sosMarkers.current).forEach(id => {
-            if (!newSosMarkers[id]) {
-                mapInstance.removeLayer(sosMarkers.current[id]);
-            }
-        });
-        sosMarkers.current = newSosMarkers;
-    }, [incidents, sos, mapInstance, targetEventId]);
+    // Layer stats for toggle badges
+    const layerStats = useMemo(() => ({
+        volunteers: volunteerCount,
+        incidents: activeIncidentCount,
+        sos: activeSosCount,
+        attendees: attendeeCount,
+    }), [volunteerCount, activeIncidentCount, activeSosCount, attendeeCount]);
 
+    // ── Loading state ──
     if (loading) {
         return (
             <div style={{ display: 'flex', minHeight: '100vh', background: CONTENT_BG }}>
                 <Sidebar />
                 <main style={{ flex: 1, marginLeft: 230, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ textAlign: 'center' }}>
-                        <Loader2 size={40} className="animate-spin" color={ACCENT} style={{ marginBottom: 16 }} />
+                        <Loader2 size={40} className="lm-spin" color={ACCENT} style={{ marginBottom: 16 }} />
                         <p style={{ color: TEXT_MID, fontWeight: 600 }}>Loading map data...</p>
                     </div>
                 </main>
-                <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                <style>{`.lm-spin { animation: lm-spin-kf 1s linear infinite; } @keyframes lm-spin-kf { to { transform: rotate(360deg); } }`}</style>
             </div>
         );
     }
 
-    if (!targetEventId && !eventId) {
+    // ── No events fallback ──
+    if (allEvents.length === 0 && !targetEventId) {
         return (
             <div style={{ display: 'flex', minHeight: '100vh', background: CONTENT_BG }}>
                 <Sidebar />
@@ -463,8 +217,13 @@ const LiveMap = () => {
                     <div style={{ textAlign: 'center', maxWidth: 400, padding: 32, background: '#fff', borderRadius: 16, border: `1px solid ${BORDER}` }}>
                         <Globe size={48} color={TEXT_MID} style={{ marginBottom: 16, opacity: 0.5 }} />
                         <h2 style={{ fontSize: 18, fontWeight: 800, color: TEXT_DARK, marginBottom: 8 }}>No Active Events</h2>
-                        <p style={{ color: TEXT_MID, fontSize: 14, marginBottom: 24 }}>We couldn't find any active events to display on the map. Please create an event first.</p>
-                        <button onClick={() => navigate('/events')} style={{ padding: '10px 20px', background: ACCENT, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
+                        <p style={{ color: TEXT_MID, fontSize: 14, marginBottom: 24 }}>
+                            No events found to display on the map. Create an event first.
+                        </p>
+                        <button
+                            onClick={() => navigate('/events')}
+                            style={{ padding: '10px 20px', background: ACCENT, color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}
+                        >
                             Go to Events
                         </button>
                     </div>
@@ -473,7 +232,7 @@ const LiveMap = () => {
         );
     }
 
-
+    // ── Main Render ──
     return (
         <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Inter','Segoe UI',sans-serif", background: CONTENT_BG }}>
             <Sidebar />
@@ -481,126 +240,269 @@ const LiveMap = () => {
                 <PageHeader title="Live Map" breadcrumb="Dashboard" />
 
                 <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                    
-                    {/* LEFT PANEL: Users List */}
-                    <div style={{ width: 360, background: '#f8fafc', borderRight: `1px solid ${BORDER}`, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        {/* Stats Panel */}
-                        {(() => {
-                            // CRITICAL FIX: Validate users before rendering
-                            const validUsers = Object.values(users).filter(u => {
-                                const isValid = u && u.user_id && u.name && (u.lat || u.latitude) && (u.lng || u.longitude);
-                                if (!isValid && u) {
-                                    console.error(`[LIVEMAP_VALIDATION] Invalid user detected:`, { 
-                                        name: u.name, 
-                                        user_id: u.user_id,
-                                        coords: `${u.lat || u.latitude}, ${u.lng || u.longitude}`
-                                    });
-                                }
-                                return isValid;
-                            });
-                            const attendeeCount = validUsers.filter(u => u.role === 'attendee').length;
-                            const volunteerCount = validUsers.filter(u => u.role === 'volunteer').length;
-                            console.log(`[LIVEMAP_STATS] Total valid users: ${validUsers.length} (${attendeeCount} attendees, ${volunteerCount} volunteers)`);
-                            
-                            return (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 4 }}>
-                                    <div style={{ background: '#fff', padding: '12px', borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-                                        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Attendees</p>
-                                        <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: ACCENT }}>{attendeeCount}</p>
-                                    </div>
-                                    <div style={{ background: '#fff', padding: '12px', borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-                                        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Volunteers</p>
-                                        <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{volunteerCount}</p>
-                                    </div>
-                                </div>
-                            );
-                        })()}
 
-                        
+                    {/* ═══ LEFT PANEL: Stats + User List ═══ */}
+                    <div style={{ width: 360, background: '#f8fafc', borderRight: `1px solid ${BORDER}`, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                        {/* Stats grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Attendees</p>
+                                <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: ACCENT }}>{attendeeCount}</p>
+                            </div>
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Volunteers</p>
+                                <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#3b82f6' }}>{volunteerCount}</p>
+                            </div>
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Incidents</p>
+                                <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#f97316' }}>{activeIncidentCount}</p>
+                            </div>
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 10, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>SOS Alerts</p>
+                                <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#ef4444' }}>{activeSosCount}</p>
+                            </div>
+                        </div>
+
+                        {/* Search */}
                         <div style={{ position: 'relative' }}>
                             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: TEXT_MID }} />
-                            <input 
-                                placeholder="Search user..." 
+                            <input
+                                placeholder="Search user..."
                                 value={mapSearch}
                                 onChange={e => setMapSearch(e.target.value)}
-                                style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 13, outline: 'none' }}
+                                style={{ width: '100%', padding: '8px 12px 8px 34px', borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                             />
                         </div>
 
-                        {Object.values(users)
-                            .filter(u => {
-                                // CRITICAL FIX: Filter out invalid users before rendering
-                                const isValid = u && u.user_id && u.name && (u.lat || u.latitude) && (u.lng || u.longitude);
-                                if (!isValid) {
-                                    if (u) {
-                                        console.error(`[LIVEMAP_FILTER] Skipping invalid user:`, u);
-                                    }
-                                    return false;
-                                }
-                                
-                                // Apply search filter
-                                const q = (mapSearch || "").trim().toLowerCase();
-                                return (u.name || "").toLowerCase().includes(q) || 
-                                       (u.role || "").toLowerCase().includes(q);
-                            })
-                            .sort((a,b) => {
-                                const timeA = new Date(a.last_seen).getTime() || 0;
-                                const timeB = new Date(b.last_seen).getTime() || 0;
-                                return timeB - timeA;
-                            }).map(user => (
-                            <div key={user.user_id || user.id} style={{ background: '#fff', borderRadius: 12, border: `1px solid ${BORDER}`, padding: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <img src={user.pic} alt={user.name} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}` }} />
-                                        <div>
-                                            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: TEXT_DARK }}>{user.name}</h4>
-                                            <span style={{ fontSize: 12, color: TEXT_MID, textTransform: 'capitalize' }}>{user.role}</span>
+                        {/* User Cards */}
+                        {filteredPanelUsers.length === 0 && (
+                            <div style={{ textAlign: 'center', padding: 32, color: TEXT_MID, fontSize: 13 }}>
+                                {contextLoading ? 'Loading users...' : 'No users on the map yet.'}
+                            </div>
+                        )}
+
+                        {filteredPanelUsers.map(user => {
+                            const lat = parseFloat(user.lat || user.latitude);
+                            const lng = parseFloat(user.lng || user.longitude);
+                            const isVol = user.role === 'volunteer';
+
+                            return (
+                                <div key={user.user_id} style={{
+                                    background: '#fff', borderRadius: 12, border: `1px solid ${BORDER}`,
+                                    padding: 16, boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <img
+                                                src={user.pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`}
+                                                alt={user.name}
+                                                style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${isVol ? '#3b82f6' : '#f43f5e'}` }}
+                                                onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}`; }}
+                                            />
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: TEXT_DARK }}>{user.name}</h4>
+                                                <span style={{ fontSize: 11, color: TEXT_MID, textTransform: 'capitalize' }}>{user.role}</span>
+                                                {isVol && (
+                                                    <span style={{
+                                                        marginLeft: 6, fontSize: 9, fontWeight: 800, padding: '1px 6px',
+                                                        borderRadius: 4,
+                                                        background: user.status === 'available' ? '#dcfce7' : user.status === 'responding' ? '#fef3c7' : '#fee2e2',
+                                                        color: user.status === 'available' ? '#16a34a' : user.status === 'responding' ? '#d97706' : '#dc2626'
+                                                    }}>
+                                                        {(user.status || 'available').toUpperCase()}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: TEXT_MID }}>{(user.user_id || user.id || '').toString().substring(0,6)}</span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: 12, marginBottom: 12 }}>
-                                    <button 
-                                        onClick={() => mapInstance?.setView([user.lat, user.lng], 18)}
-                                        style={{ background: ACCENT, color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                                        Locate
-                                    </button>
-                                </div>
-                                
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', borderTop: `1px solid #f1f5f9`, paddingTop: '12px' }}>
-                                    <div>
-                                        <p style={{ margin: 0, fontSize: 11, color: TEXT_MID, marginBottom: 2 }}>First seen</p>
-                                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: ACCENT }}>{user.first_seen}</p>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <p style={{ margin: 0, fontSize: 11, color: TEXT_MID, marginBottom: 2 }}>Last seen</p>
-                                        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: ACCENT }}>{user.last_seen}</p>
-                                    </div>
-                                </div>
 
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, background: '#f8fafc', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                                        <LocateFixed size={14} color={TEXT_MID} />
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_DARK }}>{user.distance} km</span>
+                                    <div style={{ display: 'flex' }}>
+                                        <button
+                                            onClick={() => setFlyTarget({ lat, lng, zoom: 18 })}
+                                            style={{ flex: 1, padding: '8px 10px', background: ACCENT, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12, fontWeight: 700 }}
+                                        >
+                                            <LocateFixed size={14} /> Locate
+                                        </button>
                                     </div>
-
-                                    <button 
-                                        onClick={() => { mapInstance?.flyTo([user.lat, user.lng], 18); userMarkers.current[user.user_id]?.openPopup(); }}
-                                        style={{ padding: '8px', background: ACCENT, color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                                        <LocateFixed size={16} />
-                                    </button>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
-                    {/* MAIN PANEL: Live Map */}
+                    {/* ═══ MAIN: Map ═══ */}
                     <div style={{ flex: 1, position: 'relative', background: '#e8eaed' }}>
-                        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+                        <MapContainer
+                            center={mapCenter}
+                            zoom={14}
+                            style={{ width: '100%', height: '100%' }}
+                            zoomControl={true}
+                            attributionControl={false}
+                        >
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+                            {/* Fly-to handler */}
+                            <FlyToHandler target={flyTarget} />
+
+                            {/* Event boundaries (all events) */}
+                            {layers.boundaries && (
+                                <EventBoundaries events={allEvents} />
+                            )}
+
+                            {/* Declarative data layers — show across all events */}
+                            {layers.incidents && (
+                                <IncidentMarkers incidents={incidents} eventId={null} />
+                            )}
+
+                            {layers.sos && (
+                                <SOSMarkers sosAlerts={sos} eventId={null} />
+                            )}
+
+                            {layers.volunteers && (
+                                <VolunteerMarkers locations={users} />
+                            )}
+
+                            {/* Imperative layers */}
+                            <AttendeeLayer
+                                locations={users}
+                                showHeatmap={layers.heatmap}
+                                showMarkers={layers.attendees}
+                            />
+
+                            <RiskZoneLayer
+                                eventId={targetEventId}
+                                visible={layers.riskZones}
+                                api={api}
+                            />
+                        </MapContainer>
+
+                        {/* Layer toggle controls */}
+                        <LayerControls
+                            layers={layers}
+                            onToggle={handleToggle}
+                            stats={layerStats}
+                        />
                     </div>
                 </div>
             </main>
+
+            {/* ═══ Global map CSS ═══ */}
+            <style>{`
+                /* SOS Marker Animations */
+                .sos-marker-wrap {
+                    position: relative;
+                    width: 44px;
+                    height: 44px;
+                }
+                .sos-pulse-ring {
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 44px; height: 44px;
+                    border-radius: 50%;
+                    background: rgba(239, 68, 68, 0.4);
+                    animation: sos-pulse-kf 1.5s ease-out infinite;
+                }
+                .sos-pulse-ring-delayed {
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 44px; height: 44px;
+                    border-radius: 50%;
+                    background: rgba(239, 68, 68, 0.25);
+                    animation: sos-pulse-kf 1.5s ease-out infinite 0.4s;
+                }
+                .sos-core-dot {
+                    position: absolute;
+                    top: 12px; left: 12px;
+                    width: 20px; height: 20px;
+                    border-radius: 50%;
+                    background: #ef4444;
+                    border: 3px solid #fff;
+                    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.6);
+                    z-index: 2;
+                }
+                @keyframes sos-pulse-kf {
+                    0% { transform: scale(0.5); opacity: 1; }
+                    100% { transform: scale(2.2); opacity: 0; }
+                }
+                @keyframes sos-blink {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.3; }
+                }
+
+                /* Spinner */
+                .lm-spin { animation: lm-spin-kf 1s linear infinite; }
+                @keyframes lm-spin-kf { to { transform: rotate(360deg); } }
+
+                /* Leaflet popup overrides */
+                .leaflet-popup-content-wrapper {
+                    border-radius: 12px !important;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+                }
+                .leaflet-popup-content {
+                    margin: 12px 14px !important;
+                    font-family: 'Inter','Segoe UI',sans-serif !important;
+                }
+
+                /* Marker cluster overrides */
+                .marker-cluster-small {
+                    background-color: rgba(79, 70, 229, 0.15) !important;
+                }
+                .marker-cluster-small div {
+                    background-color: rgba(79, 70, 229, 0.6) !important;
+                    color: #fff !important;
+                    font-weight: 700 !important;
+                }
+                .marker-cluster-medium {
+                    background-color: rgba(234, 179, 8, 0.15) !important;
+                }
+                .marker-cluster-medium div {
+                    background-color: rgba(234, 179, 8, 0.6) !important;
+                    color: #fff !important;
+                    font-weight: 700 !important;
+                }
+                .marker-cluster-large {
+                    background-color: rgba(239, 68, 68, 0.15) !important;
+                }
+                .marker-cluster-large div {
+                    background-color: rgba(239, 68, 68, 0.6) !important;
+                    color: #fff !important;
+                    font-weight: 700 !important;
+                }
+
+                /* Event Boundary Tooltip */
+                .leaflet-tooltip.event-boundary-tooltip {
+                    background: #4F46E5;
+                    color: #ffffff;
+                    border: 2px solid #ffffff;
+                    box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+                    border-radius: 6px;
+                    padding: 4px 10px;
+                    font-weight: 800;
+                    font-size: 11px;
+                    letter-spacing: 0.02em;
+                    white-space: nowrap;
+                }
+                .leaflet-tooltip.event-boundary-tooltip::before {
+                    display: none;
+                }
+                
+                /* Risk Zone Tooltip */
+                .leaflet-tooltip.risk-zone-tooltip {
+                    background: rgba(255, 255, 255, 0.85);
+                    border: 1px solid rgba(0,0,0,0.1);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    border-radius: 6px;
+                    padding: 4px 8px;
+                    color: #1e293b;
+                    font-weight: 800;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                }
+                .leaflet-tooltip.risk-zone-tooltip::before {
+                    display: none;
+                }
+            `}</style>
         </div>
     );
 };

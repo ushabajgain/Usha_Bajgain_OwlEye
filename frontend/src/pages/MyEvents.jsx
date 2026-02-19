@@ -91,7 +91,7 @@ const MyEvents = () => {
                     {loading ? (
                         <div style={{ padding: 100, textAlign: 'center' }}><Loader2 className="animate-spin" color={ACCENT} /></div>
                     ) : filtered.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: 80, background: CARD_BG, borderRadius: 24, border: `1px dashed ${BORDER}` }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 80, background: CARD_BG, borderRadius: 24, border: `1px dashed ${BORDER}` }}>
                             <Calendar size={48} color={TEXT_MID} style={{ opacity: 0.2, marginBottom: 16 }} />
                             <h3 style={{ color: TEXT_DARK }}>No events found</h3>
                             <p style={{ color: TEXT_MID }}>Search for new events to join!</p>

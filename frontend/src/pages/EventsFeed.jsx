@@ -362,7 +362,7 @@ const EventsFeed = () => {
                             <Loader2 size={32} style={{ color: ACCENT, animation: 'spin 1s linear infinite' }} />
                         </div>
                     ) : pagedEvents.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '80px 20px', color: TEXT_MID }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '80px 20px', color: TEXT_MID }}>
                             <Calendar size={48} style={{ margin: '0 auto 16px', opacity: 0.25 }} />
                             <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No {activeTab.toLowerCase()} events found.</p>
                             <p style={{ fontSize: 13 }}>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
 import { usePagination, Pagination } from '../components/Pagination';
 import { 
-    Globe, Search, Filter, MoreHorizontal, 
+    Globe, Search, Filter, Trash2, 
     CheckCircle, XCircle, AlertTriangle, Eye,
     Calendar, MapPin, Users, Loader2
 } from 'lucide-react';
@@ -17,7 +18,11 @@ const TEXT_DARK = C.textPrimary;
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
+import { useFeedback } from '../context/FeedbackContext';
+
 const EventManagement = () => {
+    const { showToast, confirmAction } = useFeedback();
+    const navigate = useNavigate();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
@@ -41,29 +46,36 @@ const EventManagement = () => {
     };
 
     const handleAction = async (id, action) => {
+        if (action === 'view') {
+            navigate(`/events/${id}`);
+            return;
+        }
+        
+        if (action === 'delete') {
+            confirmAction({
+                title: "Permanently Delete Event?",
+                message: "Are you sure you want to delete this event? All tickets and associated data will be lost forever. This action is irreversible.",
+                type: 'danger',
+                onConfirm: () => performDelete(id)
+            });
+        }
+    };
+
+    const performDelete = async (id) => {
         try {
-            if (action === 'view') {
-                window.location.href = `/events/${id}`;
-                return;
-            }
-            
-            if (action === 'approve') {
-                await api.post(`/events/${id}/publish/`);
-                setEvents(events.map(e => e.id === id ? { ...e, status: 'active' } : e));
-            } else if (action === 'suspend') {
-                await api.post(`/events/${id}/unpublish/`);
-                setEvents(events.map(e => e.id === id ? { ...e, status: 'draft' } : e));
-            }
+            await api.delete(`/events/${id}/`);
+            setEvents(events.filter(e => e.id !== id));
+            showToast("Event permanently deleted.", 'success');
         } catch (err) {
             console.error("Action failed:", err);
-            alert("Execution failed. Check your permissions.");
+            showToast("Failed to delete event. Check your permissions.", 'error');
         }
     };
 
     const filtered = useMemo(() => {
         return events.filter(e => {
-            const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase()) || 
-                                  e.organizer_name?.toLowerCase().includes(search.toLowerCase());
+            const matchesSearch = (e.name || "").toLowerCase().includes(search.toLowerCase()) || 
+                                  (e.organizer_name || "").toLowerCase().includes(search.toLowerCase());
             const matchesFilter = filter === 'all' || e.status === filter;
             return matchesSearch && matchesFilter;
         });
@@ -154,9 +166,8 @@ const EventManagement = () => {
                                             </td>
                                             <td style={s.td}>
                                                 <div style={{ display: 'flex', gap: 8 }}>
-                                                    <button onClick={() => handleAction(e.id, 'approve')} title="Approve" style={{ padding: 6, borderRadius: 6, border: 'none', background: '#f0fdf4', color: '#16a34a', cursor: 'pointer' }}><CheckCircle size={14} /></button>
-                                                    <button onClick={() => handleAction(e.id, 'suspend')} title="Suspend" style={{ padding: 6, borderRadius: 6, border: 'none', background: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}><XCircle size={14} /></button>
                                                     <button onClick={() => handleAction(e.id, 'view')} title="View Live" style={{ padding: 6, borderRadius: 6, border: 'none', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer' }}><Eye size={14} /></button>
+                                                    <button onClick={() => handleAction(e.id, 'delete')} title="Delete Event" style={{ padding: 6, borderRadius: 6, border: 'none', background: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}><Trash2 size={14} /></button>
                                                 </div>
                                             </td>
                                         </tr>

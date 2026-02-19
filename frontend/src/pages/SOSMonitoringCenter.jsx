@@ -29,7 +29,10 @@ const flashingIcon = L.divIcon({
 
 import { useSafetySocket } from '../hooks/useSafetySocket';
 
+import { useFeedback } from '../context/FeedbackContext';
+
 const SOSMonitoringCenter = () => {
+    const { showToast } = useFeedback();
     const [targetEventId, setTargetEventId] = useState('1');
     const { sosAlerts, isConnected, loading: socketLoading } = useSafetySocket(targetEventId);
     
@@ -41,12 +44,14 @@ const SOSMonitoringCenter = () => {
         try {
             if (action === 'resolve') {
                 await api.patch(`/monitoring/sos/${id}/`, { status: 'resolved' });
+                showToast("SOS alert marked as resolved.");
             } else if (action === 'assign') {
-                await api.patch(`/monitoring/sos/${id}/`, { status: 'acknowledged' });
-                alert("Responder dispatched and SOS acknowledged.");
+                await api.patch(`/monitoring/sos/${id}/`, { status: 'assigned' });
+                showToast("Responder dispatched to SOS location.");
             }
         } catch (err) {
             console.error("SOS Action failed", err);
+            showToast("Failed to process SOS action.", 'error');
         }
     };
 
@@ -87,7 +92,7 @@ const SOSMonitoringCenter = () => {
                         {socketLoading && alerts.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: 40 }}><Loader2 size={32} className="animate-spin" color={ACCENT} /></div>
                         ) : alerts.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: 80, background: CARD_BG, borderRadius: 20, border: `1px dashed ${BORDER}` }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: 80, background: CARD_BG, borderRadius: 20, border: `1px dashed ${BORDER}` }}>
                                 <ShieldAlert size={48} color={TEXT_MID} style={{ opacity: 0.2, marginBottom: 16 }} />
                                 <h3 style={{ color: TEXT_DARK }}>All Systems Clear</h3>
                                 <p style={{ color: TEXT_MID }}>No active SOS signals detected platform-wide.</p>
@@ -106,30 +111,32 @@ const SOSMonitoringCenter = () => {
                                             </div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
-                                            <span style={{ padding: '4px 10px', borderRadius: 20, background: a.status === 'active' ? ACCENT : '#f59e0b', color: '#fff', fontSize: 9, fontWeight: 900, display: 'block', marginBottom: 4 }}>{a.status === 'active' ? 'PRIORITY 1' : 'ASSIGNED'}</span>
+                                            <span style={{ padding: '4px 10px', borderRadius: 20, background: a.status === 'reported' ? ACCENT : '#f59e0b', color: '#fff', fontSize: 9, fontWeight: 900, display: 'block', marginBottom: 4 }}>{a.status === 'reported' ? 'PRIORITY 1' : 'ASSIGNED'}</span>
                                             <span style={{ fontSize: 10, color: TEXT_MID }}>{a.event_name}</span>
                                         </div>
                                     </div>
                                     
-                                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12, marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: TEXT_DARK, fontWeight: 600 }}>
-                                            <User size={14} color={TEXT_MID} /> {a.user_name}
+                                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: '16px 12px', marginBottom: 16, display: 'grid', gridTemplateColumns: '35% 1fr', gap: 12 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: TEXT_DARK, fontWeight: 600, overflow: 'hidden' }}>
+                                            <User size={14} color={TEXT_MID} style={{ flexShrink: 0 }} /> 
+                                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.user_name}</span>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: TEXT_DARK, fontWeight: 600 }}>
-                                            <MapPin size={14} color={TEXT_MID} /> Zone {a.id % 5 + 1}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: TEXT_DARK, fontWeight: 600, overflow: 'hidden' }}>
+                                            <MapPin size={14} color={TEXT_MID} style={{ flexShrink: 0 }} /> 
+                                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.location_name || 'Locating...'}</span>
                                         </div>
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 10 }}>
-                                        {a.status === 'active' && (
+                                        {a.status === 'reported' && (
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'assign'); }}
-                                                style={{ flex: 1, padding: '10px', borderRadius: 10, background: ACCENT, color: '#fff', border: 'none', fontWeight: 800, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                <Radio size={14} /> Assign
+                                                style={{ flex: 1, padding: '14px', borderRadius: 10, background: ACCENT, color: '#fff', border: 'none', fontWeight: 800, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                                <Radio size={16} /> Assign
                                             </button>
                                         )}
-                                        <button onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'resolve'); }} style={{ flex: a.status === 'active' ? '0 0 40px' : 1, background: '#f0fdf4', color: '#16a34a', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                            <CheckCircle size={18} /> {a.status !== 'active' && <span style={{fontSize: 11, fontWeight: 800}}>Resolve</span>}
+                                        <button onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'resolve'); }} style={{ flex: a.status === 'reported' ? '0 0 50px' : 1, padding: '14px', background: '#f0fdf4', color: '#16a34a', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                            <CheckCircle size={20} /> {a.status !== 'reported' && <span style={{fontSize: 14, fontWeight: 800}}>Resolve</span>}
                                         </button>
                                     </div>
                                 </div>

@@ -18,7 +18,10 @@ const BORDER = C.border;
 
 import { useSafetySocket } from '../hooks/useSafetySocket';
 
+import { useFeedback } from '../context/FeedbackContext';
+
 const IncidentDetails = () => {
+    const { showToast } = useFeedback();
     const { id } = useParams();
     const navigate = useNavigate();
     const [incident, setIncident] = useState(null);
@@ -41,9 +44,16 @@ const IncidentDetails = () => {
             setIncident(incRes.data);
             setLogs(logRes.data);
             
-            // Step 2: Fetch event-specific volunteers using incident's event_id
-            const volRes = await api.get(`/events/${incRes.data.event_id}/volunteers/`);
-            setVolunteers(volRes.data);
+            // Step 2: Fetch event-specific volunteers using incident's event field
+            const eventId = incRes.data.event_id || incRes.data.event;
+            if (eventId) {
+                try {
+                    const volRes = await api.get(`/events/${eventId}/volunteers/`);
+                    setVolunteers(volRes.data);
+                } catch (volErr) {
+                    console.warn('Failed to fetch volunteers:', volErr);
+                }
+            }
         } catch (err) {
             console.error('Failed to fetch details', err);
         } finally {
@@ -70,18 +80,24 @@ const IncidentDetails = () => {
     const updateStatus = async (newStatus) => {
         try {
             await api.patch(`/monitoring/incidents/${id}/`, { status: newStatus });
-            fetchDetails();
+            showToast(`Incident status updated to ${newStatus}.`);
+            // ALWAYS re-fetch from backend after mutation
+            await fetchDetails();
         } catch (err) {
-            alert("Failed to update status.");
+            const detail = err.response?.data?.status || err.response?.data?.detail || "Failed to update status.";
+            showToast(Array.isArray(detail) ? detail[0] : detail, 'error');
         }
     };
 
     const assignVolunteer = async (volunteerId) => {
         try {
-            await api.patch(`/monitoring/incidents/${id}/`, { assigned_volunteer: volunteerId || null });
-            fetchDetails();
+            await api.patch(`/monitoring/incidents/${id}/`, { assigned_volunteer: volunteerId ? parseInt(volunteerId) : null });
+            showToast(volunteerId ? "Volunteer dispatched." : "Volunteer unassigned.");
+            // ALWAYS re-fetch from backend after mutation
+            await fetchDetails();
         } catch (err) {
-            alert("Failed to assign volunteer.");
+            const detail = err.response?.data?.assigned_volunteer || err.response?.data?.detail || "Failed to assign volunteer.";
+            showToast(Array.isArray(detail) ? detail[0] : detail, 'error');
         }
     };
 
@@ -100,8 +116,8 @@ const IncidentDetails = () => {
         </div>
     );
 
-    const statusColor = incident.status === 'resolved' ? '#16a34a' : incident.status === 'verified' ? '#2563eb' : '#d97706';
-    const statusBg = incident.status === 'resolved' ? '#dcfce7' : incident.status === 'verified' ? '#eff6ff' : '#fef3c7';
+    const statusColor = incident.status === 'resolved' ? '#16a34a' : incident.status === 'false_alarm' ? C.textSecondary : incident.status === 'verified' ? '#2563eb' : '#d97706';
+    const statusBg = incident.status === 'resolved' ? '#dcfce7' : incident.status === 'false_alarm' ? '#f1f5f9' : incident.status === 'verified' ? '#eff6ff' : '#fef3c7';
 
     const s = {
         shell: { display: 'flex', minHeight: '100vh', fontFamily: "'Inter','Segoe UI',sans-serif" },
@@ -135,8 +151,9 @@ const IncidentDetails = () => {
                         <div style={s.card}>
                             <div style={s.cardPad}>
                                 <p style={s.sectionLabel}><Info size={13} /> Summary</p>
-                                <h2 style={{ fontSize: 20, fontWeight: 800, color: TEXT_DARK, marginBottom: 12 }}>
+                                <h2 style={{ fontSize: 20, fontWeight: 800, color: TEXT_DARK, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
                                     {incident.category_display}: {incident.title}
+                                    <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: statusBg, color: statusColor }}>{incident.status_display}</span>
                                 </h2>
                                 <p style={{ fontSize: 14, color: TEXT_MID, lineHeight: 1.7, background: '#f8fafc', padding: '14px 16px', borderRadius: 8, border: `1px solid ${BORDER}` }}>
                                     {incident.description}
@@ -196,32 +213,42 @@ const IncidentDetails = () => {
                                         <button 
                                             onClick={() => updateStatus('verified')}
                                             style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                                            Verify Incident
+                                            Acknowledge
                                         </button>
                                         <button 
-                                            onClick={() => updateStatus('false')}
-                                            style={{ flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${BORDER}`, background: '#f8fafc', color: TEXT_MID, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                                            Mark False
+                                            onClick={() => updateStatus('false_alarm')}
+                                            style={{ flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${BORDER}`, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                                            False Alarm
                                         </button>
                                     </div>
                                 )}
 
-                                {incident.status === 'verified' && (
-                                    <button 
-                                        onClick={() => updateStatus('resolved')}
-                                        style={{ width: '100%', padding: '12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                                        Mark as Resolved
-                                    </button>
+                                {(incident.status === 'verified' || incident.status === 'responding') && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        <button 
+                                            onClick={() => updateStatus('resolved')}
+                                            style={{ width: '100%', padding: '12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                                            Mark as Resolved
+                                        </button>
+                                        <button 
+                                            onClick={() => updateStatus('false_alarm')}
+                                            style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${BORDER}`, background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                                            Dismiss (False Alarm)
+                                        </button>
+                                    </div>
                                 )}
 
-                                {incident.status !== 'resolved' && incident.status !== 'false' && (
-                                    <div style={{ marginTop: 8 }}>
-                                        <label style={{ ...s.metaLabel, marginBottom: 8, display: 'block' }}>Assign Volunteer</label>
+                                {incident.status !== 'resolved' && incident.status !== 'false_alarm' && (
+                                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+                                        <label style={{ ...s.metaLabel, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <Shield size={10} /> Dispatch Volunteer
+                                        </label>
+                                        <div style={{ fontSize: 10, color: TEXT_MID, marginBottom: 8 }}>Available responders for {incident.event_name || 'this event'}</div>
                                         <select 
                                             value={incident.assigned_volunteer || ''} 
                                             onChange={(e) => assignVolunteer(e.target.value)}
                                             style={{ width: '100%', padding: '10px', borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 13, outline: 'none', background: '#f8fafc' }}>
-                                            <option value="">Choose Volunteer...</option>
+                                            <option value="">-- No Volunteer Assigned --</option>
                                             {volunteers.map(v => (
                                                 <option key={v.id} value={v.id}>{v.full_name}</option>
                                             ))}
@@ -229,7 +256,7 @@ const IncidentDetails = () => {
                                     </div>
                                 )}
 
-                                {(incident.status === 'resolved' || incident.status === 'false') && (
+                                {(incident.status === 'resolved' || incident.status === 'false_alarm') && (
                                     <div style={{ textAlign: 'center', padding: '10px', background: '#f8fafc', borderRadius: 8, border: `1px dashed ${BORDER}` }}>
                                         <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_MID }}>This incident is closed.</span>
                                     </div>
@@ -250,7 +277,7 @@ const IncidentDetails = () => {
                                         <div style={{
                                             position: 'absolute', left: 0, top: 2, width: 20, height: 20, borderRadius: '50%',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            background: log.action_type === 'resolved' ? '#16a34a' : log.action_type === 'reported' ? ACCENT : '#d97706',
+                                            background: log.action_type === 'resolved' ? '#16a34a' : (log.action_type === 'false_alarm' ? '#64748b' : (log.action_type === 'reported' ? ACCENT : '#d97706')),
                                         }}>
                                             {log.action_type === 'resolved'
                                                 ? <CheckCircle size={10} color="#fff" />

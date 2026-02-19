@@ -16,10 +16,10 @@ const TEXT_DARK = C.textPrimary;
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
-const statusStyle = (status) => ({
+    const statusStyle = (status) => ({
     display: 'inline-block', padding: '3px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-    background: status === 'resolved' ? '#dcfce7' : status === 'false' ? '#f1f5f9' : '#eff6ff',
-    color: status === 'resolved' ? '#16a34a' : status === 'false' ? TEXT_MID : ACCENT,
+    background: status === 'resolved' ? '#dcfce7' : status === 'false_alarm' ? '#f1f5f9' : '#eff6ff',
+    color: status === 'resolved' ? '#16a34a' : status === 'false_alarm' ? TEXT_MID : ACCENT,
 });
 
 const IncidentHistory = () => {
@@ -102,7 +102,7 @@ const IncidentHistory = () => {
                         <option value="pending">Pending</option>
                         <option value="verified">Verified</option>
                         <option value="resolved">Resolved</option>
-                        <option value="false">False Report</option>
+                        <option value="false_alarm">False Alarm</option>
                     </select>
                     <select style={s.select} value={filter.priority} onChange={e => setFilter({ ...filter, priority: e.target.value })}>
                         <option value="">All Priorities</option>

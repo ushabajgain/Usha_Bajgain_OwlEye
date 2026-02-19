@@ -235,10 +235,13 @@ const styles = {
     }
 };
 
+import { useFeedback } from '../context/FeedbackContext';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPONENT: VOLUNTEER SOS ASSIGNMENTS
 // ═══════════════════════════════════════════════════════════════════════════
 const VolunteerSOS = () => {
+    const { showToast, confirmAction } = useFeedback();
     const navigate = useNavigate();
     const { sosAlerts, loading: contextLoading } = useSafety();
     
@@ -248,7 +251,6 @@ const VolunteerSOS = () => {
     // UI state
     const [processingId, setProcessingId] = useState(null);
     const [error, setError] = useState(null);
-    const [actionMessage, setActionMessage] = useState({});
 
     // ───────────────────────────────────────────────────────────────────────
     // ✅ CRITICAL: Filter SOS assigned to THIS volunteer + active status
@@ -257,7 +259,9 @@ const VolunteerSOS = () => {
         const active = Object.values(sosAlerts || {})
             .filter(sos => {
                 // Must be assigned to current volunteer
-                const isAssignedToMe = sos.assigned_volunteer_id === userId;
+                // Handle both API field name (assigned_volunteer) and WS field name (assigned_volunteer_id)
+                const volunteerId = sos.assigned_volunteer_id || sos.assigned_volunteer;
+                const isAssignedToMe = parseInt(volunteerId) === userId;
                 
                 // Must be active (not resolved)
                 const isActive = sos.status !== 'resolved' && sos.status !== 'cancelled';
@@ -282,25 +286,11 @@ const VolunteerSOS = () => {
         setError(null);
         
         try {
-            const res = await api.post(`/monitoring/sos/${sosId}/accept/`);
-            setActionMessage(prev => ({
-                ...prev,
-                [sosId]: { text: 'SOS Accepted! Proceed to location.', type: 'success' }
-            }));
-            
-            // Context will auto-update via WebSocket
-            setTimeout(() => {
-                setActionMessage(prev => ({
-                    ...prev,
-                    [sosId]: null
-                }));
-            }, 3000);
+            await api.post(`/monitoring/sos/${sosId}/accept/`);
+            showToast('SOS Accepted! Proceed to location.');
         } catch (err) {
             const msg = err.response?.data?.message || 'Failed to accept SOS';
-            setActionMessage(prev => ({
-                ...prev,
-                [sosId]: { text: msg, type: 'error' }
-            }));
+            showToast(msg, 'error');
         } finally {
             setProcessingId(null);
         }
@@ -312,62 +302,39 @@ const VolunteerSOS = () => {
         
         try {
             await api.patch(`/monitoring/sos/${sosId}/`, {
-                status: 'in-progress'
+                status: 'in_progress'
             });
-            setActionMessage(prev => ({
-                ...prev,
-                [sosId]: { text: 'SOS marked as in-progress.', type: 'success' }
-            }));
-            
-            setTimeout(() => {
-                setActionMessage(prev => ({
-                    ...prev,
-                    [sosId]: null
-                }));
-            }, 3000);
+            showToast('SOS marked as in-progress.');
         } catch (err) {
             const msg = err.response?.data?.message || 'Failed to update status';
-            setActionMessage(prev => ({
-                ...prev,
-                [sosId]: { text: msg, type: 'error' }
-            }));
+            showToast(msg, 'error');
         } finally {
             setProcessingId(null);
         }
     }, []);
 
     const handleResolve = useCallback(async (sosId) => {
-        if (!window.confirm('Mark this SOS as resolved?')) return;
-        
-        setProcessingId(sosId);
-        setError(null);
-        
-        try {
-            await api.patch(`/monitoring/sos/${sosId}/`, {
-                status: 'resolved',
-                resolved_at: new Date().toISOString()
-            });
-            setActionMessage(prev => ({
-                ...prev,
-                [sosId]: { text: 'SOS resolved. Good job!', type: 'success' }
-            }));
-            
-            // Context will auto-remove via WebSocket
-            setTimeout(() => {
-                setActionMessage(prev => ({
-                    ...prev,
-                    [sosId]: null
-                }));
-            }, 3000);
-        } catch (err) {
-            const msg = err.response?.data?.message || 'Failed to resolve SOS';
-            setActionMessage(prev => ({
-                ...prev,
-                [sosId]: { text: msg, type: 'error' }
-            }));
-        } finally {
-            setProcessingId(null);
-        }
+        confirmAction({
+            title: "Resolve SOS",
+            message: "Mark this SOS as resolved? Ensure the attendee is safe.",
+            onConfirm: async () => {
+                setProcessingId(sosId);
+                setError(null);
+                
+                try {
+                    await api.patch(`/monitoring/sos/${sosId}/`, {
+                        status: 'resolved',
+                        resolved_at: new Date().toISOString()
+                    });
+                    showToast('SOS resolved. Good job!');
+                } catch (err) {
+                    const msg = err.response?.data?.message || 'Failed to resolve SOS';
+                    showToast(msg, 'error');
+                } finally {
+                    setProcessingId(null);
+                }
+            }
+        });
     }, []);
 
     // ───────────────────────────────────────────────────────────────────────
@@ -379,7 +346,7 @@ const VolunteerSOS = () => {
             <Sidebar />
             <div style={styles.main}>
                 <PageHeader 
-                    title="My SOS Assignments" 
+                    title="SOS Alerts" 
                     subtitle={`${assignedSOS.length} active emergency alert${assignedSOS.length !== 1 ? 's' : ''}`}
                 />
                 
@@ -422,188 +389,100 @@ const VolunteerSOS = () => {
 
                     {/* SOS List */}
                     {!contextLoading && assignedSOS.length > 0 && (
-                        <div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                             {assignedSOS.map(sos => {
                                 const isProcessing = processingId === sos.id;
-                                const message = actionMessage[sos.id];
-                                const statusIsReported = sos.status === 'reported';
-                                const statusIsAssigned = sos.status === 'assigned';
-                                const statusIsInProgress = sos.status === 'in-progress' || sos.status === 'acknowledged';
-
+                                
                                 return (
                                     <div key={sos.id} style={styles.sosCard(sos.status)}>
                                         {/* Header */}
                                         <div style={styles.sosHeader}>
                                             <Siren size={24} color={DANGER} />
-                                            <div>
+                                            <div style={{ flex: 1 }}>
                                                 <div style={styles.sosTitle}>
-                                                    SOS from {sos.user_name || 'Unknown Attendee'}
+                                                    Emergency Alert from {sos.user_name || 'Attendee'}
                                                 </div>
-                                                <div style={{ ...styles.statusBadge(sos.status), marginTop: 8 }}>
-                                                    {sos.status === 'reported' ? '🔴 Reported' :
-                                                     sos.status === 'assigned' ? '🟡 Assigned to You' :
-                                                     sos.status === 'in-progress' ? '🔵 In Progress' :
-                                                     'Resolved'}
+                                                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                                                    <div style={styles.statusBadge(sos.status)}>
+                                                        {sos.status.toUpperCase()}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, padding: '4px 10px', background: '#fef2f2', color: DANGER, borderRadius: 20, fontWeight: 800 }}>
+                                                        PRIORITY 1
+                                                    </div>
                                                 </div>
                                             </div>
+                                            <button 
+                                                onClick={() => navigate(`/organizer/live-map/${sos.event_id || ''}`)}
+                                                style={styles.button('secondary')}
+                                            >
+                                                <Navigation size={14} /> Map
+                                            </button>
                                         </div>
 
                                         {/* Details Grid */}
-                                        <div style={styles.sosDetails}>
+                                        <div style={{ ...styles.sosDetails, background: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 20 }}>
                                             {/* Attendee Info */}
                                             <div style={styles.detailRow}>
-                                                <Phone size={16} style={styles.detailIcon} />
+                                                <Phone size={14} color={TEXT_MID} />
                                                 <div>
-                                                    <div style={styles.detailLabel}>Contact</div>
-                                                    <div style={styles.detailValue}>
-                                                        {sos.user_phone || 'No phone provided'}
-                                                    </div>
+                                                    <div style={styles.detailLabel}>Attendee Contact</div>
+                                                    <div style={styles.detailValue}>{sos.user_phone || 'N/A'}</div>
                                                 </div>
                                             </div>
 
                                             {/* Location */}
                                             <div style={styles.detailRow}>
-                                                <MapPin size={16} style={styles.detailIcon} />
+                                                <MapPin size={14} color={ACCENT} />
                                                 <div>
-                                                    <div style={styles.detailLabel}>Location</div>
-                                                    <div style={styles.detailValue}>
-                                                        {sos.location_name || `${sos.lat}, ${sos.lng}`}
-                                                    </div>
+                                                    <div style={styles.detailLabel}>Location Pin</div>
+                                                    <div style={styles.detailValue}>{sos.location_name || `${Number(sos.latitude).toFixed(4)}, ${Number(sos.longitude).toFixed(4)}`}</div>
                                                 </div>
                                             </div>
-
+                                            
                                             {/* Time */}
                                             <div style={styles.detailRow}>
-                                                <Clock size={16} style={styles.detailIcon} />
+                                                <Clock size={14} color={TEXT_MID} />
                                                 <div>
-                                                    <div style={styles.detailLabel}>Reported</div>
-                                                    <div style={styles.detailValue}>
-                                                        {new Date(sos.created_at).toLocaleTimeString()}
-                                                    </div>
+                                                    <div style={styles.detailLabel}>Time Reported</div>
+                                                    <div style={styles.detailValue}>{new Date(sos.created_at).toLocaleTimeString()}</div>
                                                 </div>
                                             </div>
-
-                                            {/* Distance */}
-                                            {sos.distance_text && (
-                                                <div style={styles.detailRow}>
-                                                    <Navigation size={16} style={styles.detailIcon} />
-                                                    <div>
-                                                        <div style={styles.detailLabel}>Distance</div>
-                                                        <div style={styles.detailValue}>
-                                                            {sos.distance_text}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Priority */}
-                                            {sos.priority && (
-                                                <div style={styles.detailRow}>
-                                                    <AlertTriangle size={16} style={styles.detailIcon} />
-                                                    <div>
-                                                        <div style={styles.detailLabel}>Priority</div>
-                                                        <div style={styles.detailValue}>
-                                                            {sos.priority === 'high' ? '🔴 High' :
-                                                             sos.priority === 'medium' ? '🟡 Medium' :
-                                                             '🟢 Low'}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
 
                                             {/* Message */}
                                             {sos.message && (
-                                                <div style={{ ...styles.detailRow, gridColumn: '1 / -1' }}>
-                                                    <AlertCircle size={16} style={styles.detailIcon} />
+                                                <div style={{ ...styles.detailRow, gridColumn: '1 / -1', borderTop: '1px solid #e2e8f0', paddingTop: 12, marginTop: 8 }}>
+                                                    <AlertCircle size={14} color={TEXT_MID} />
                                                     <div>
-                                                        <div style={styles.detailLabel}>Message</div>
-                                                        <div style={styles.detailValue}>{sos.message}</div>
+                                                        <div style={styles.detailLabel}>Emergency message</div>
+                                                        <div style={{ ...styles.detailValue, fontStyle: 'italic', color: '#475569' }}>"{sos.message}"</div>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* Action Messages */}
-                                        {message && (
-                                            <div style={{
-                                                padding: '12px',
-                                                borderRadius: 8,
-                                                marginBottom: 16,
-                                                background: message.type === 'success' ? '#ECFDF5' : '#FEF2F2',
-                                                color: message.type === 'success' ? SUCCESS : DANGER,
-                                                fontSize: 13,
-                                                fontWeight: 500
-                                            }}>
-                                                {message.text}
-                                            </div>
-                                        )}
-
                                         {/* Action Buttons */}
-                                        <div style={styles.actionBar}>
-                                            {statusIsReported && (
+                                        <div style={{ display: 'flex', gap: 10 }}>
+                                            {sos.status === 'reported' && (
                                                 <button 
                                                     onClick={() => handleAccept(sos.id)}
                                                     disabled={isProcessing}
-                                                    style={{
-                                                        ...styles.button('primary'),
-                                                        opacity: isProcessing ? 0.6 : 1,
-                                                        cursor: isProcessing ? 'not-allowed' : 'pointer'
-                                                    }}
+                                                    style={{ ...styles.button('success'), opacity: isProcessing ? 0.7 : 1 }}
                                                 >
-                                                    {isProcessing ? (
-                                                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                    ) : (
-                                                        <CheckCircle size={16} />
-                                                    )}
-                                                    {isProcessing ? 'Accepting...' : 'Accept SOS'}
+                                                    {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                                                    Acknowledge SOS
                                                 </button>
                                             )}
 
-                                            {(statusIsReported || statusIsAssigned) && (
-                                                <button 
-                                                    onClick={() => handleMarkInProgress(sos.id)}
-                                                    disabled={isProcessing}
-                                                    style={{
-                                                        ...styles.button('success'),
-                                                        opacity: isProcessing ? 0.6 : 1,
-                                                        cursor: isProcessing ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                >
-                                                    {isProcessing ? (
-                                                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                    ) : (
-                                                        <Play size={16} />
-                                                    )}
-                                                    {isProcessing ? 'Updating...' : 'In Progress'}
-                                                </button>
-                                            )}
-
-                                            {statusIsInProgress && (
+                                            {(sos.status === 'assigned' || sos.status === 'in_progress' || sos.status === 'acknowledged') && (
                                                 <button 
                                                     onClick={() => handleResolve(sos.id)}
                                                     disabled={isProcessing}
-                                                    style={{
-                                                        ...styles.button('danger'),
-                                                        opacity: isProcessing ? 0.6 : 1,
-                                                        cursor: isProcessing ? 'not-allowed' : 'pointer'
-                                                    }}
+                                                    style={{ ...styles.button('success'), opacity: isProcessing ? 0.7 : 1 }}
                                                 >
-                                                    {isProcessing ? (
-                                                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                                                    ) : (
-                                                        <CheckCircle size={16} />
-                                                    )}
-                                                    {isProcessing ? 'Resolving...' : 'Mark Resolved'}
+                                                    {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                                                    Resolve SOS
                                                 </button>
                                             )}
-
-                                            <button 
-                                                onClick={() => navigate(`/organizer/live-map/${sos.event_id || ''}`)}
-                                                style={styles.button('secondary')}
-                                            >
-                                                <Navigation size={16} />
-                                                View Map
-                                            </button>
                                         </div>
                                     </div>
                                 );

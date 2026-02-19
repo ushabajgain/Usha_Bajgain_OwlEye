@@ -72,12 +72,29 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const formatTime = (dateString) => {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return date.toLocaleDateString();
+        };
+
         const fetchData = async () => {
             try {
-                const [eventsRes, usersRes, ordersRes] = await Promise.all([
+                const [eventsRes, usersRes, ordersRes, incidentLogRes, sosLogRes] = await Promise.all([
                     api.get('/events/'),
                     api.get('/accounts/all-users/'),
-                    api.get('/tickets/organizer-orders/')
+                    api.get('/tickets/organizer-orders/'),
+                    api.get('/monitoring/incident-logs/'),
+                    api.get('/monitoring/sos-logs/')
                 ]);
                 
                 setEvents(eventsRes.data);
@@ -101,6 +118,35 @@ const AdminDashboard = () => {
                 if (!targetEventId && eventsRes.data.length > 0) {
                     setTargetEventId(eventsRes.data[0].id.toString());
                 }
+
+                // Process logs
+                const iLogs = Array.isArray(incidentLogRes.data) ? incidentLogRes.data : [];
+                const sLogs = Array.isArray(sosLogRes.data) ? sosLogRes.data : [];
+                
+                const formatLog = (log, type) => {
+                    let color = '#3b82f6';
+                    let title = `${log.performed_by_name || 'System'} ${log.action_display || log.action_type.replace('_', ' ')}`;
+                    let cat = type === 'incident' ? 'INCIDENT' : 'SOS ALERT';
+
+                    if (log.action_type === 'reported' || log.action_type === 'escalated') color = '#ef4444';
+                    else if (log.action_type === 'resolved' || log.action_type === 'verified') color = '#10b981';
+                    else if (log.action_type === 'marked_false') color = '#64748b';
+                    else if (log.action_type === 'assigned') color = '#f59e0b';
+
+                    if (log.notes) {
+                        title += ` - ${log.notes.substring(0, 40)}${log.notes.length > 40 ? '...' : ''}`;
+                    }
+
+                    return { color, cat, time: formatTime(log.timestamp), timestamp: new Date(log.timestamp), title };
+                };
+
+                const combinedLogs = [
+                    ...iLogs.map(l => formatLog(l, 'incident')),
+                    ...sLogs.map(l => formatLog(l, 'sos'))
+                ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 4);
+
+                setActivityLogs(combinedLogs);
+
             } catch (err) { console.error(err); }
             finally { setLoading(false); }
         };
@@ -250,9 +296,11 @@ const AdminDashboard = () => {
                                          </Marker>
                                      ))}
                                  </MapContainer>
-                                 <div style={{ position: 'absolute', bottom: 10, right: 10, background: isConnected ? 'rgba(74, 222, 128, 0.9)' : 'rgba(239, 68, 68, 0.9)', padding: '4px 10px', borderRadius: 4, color: '#fff', fontSize: 10, zIndex: 1000, fontWeight: 900 }}>
-                                     {isConnected ? 'LIVE FEED' : 'RECONNECTING...'}
-                                 </div>
+                                 {isConnected && (
+                                     <div style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(74, 222, 128, 0.9)', padding: '4px 10px', borderRadius: 4, color: '#fff', fontSize: 10, zIndex: 1000, fontWeight: 900 }}>
+                                         LIVE FEED
+                                     </div>
+                                 )}
                             </div>
                         </div>
 

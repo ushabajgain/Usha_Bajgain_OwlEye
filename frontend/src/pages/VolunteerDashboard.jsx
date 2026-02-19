@@ -46,7 +46,7 @@ const VolunteerDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [acceptingSOSId, setAcceptingSOSId] = useState(null); // ✅ Track which SOS is accepting
     const [sosError, setSosError] = useState(null); // ✅ Track SOS errors
-    const { incidents, nearbySosAlerts, locations = {}, loading: contextLoading, unreadCount } = useSafety();
+    const { incidents, sosAlerts, nearbySosAlerts, locations = {}, loading: contextLoading, unreadCount } = useSafety();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -55,6 +55,14 @@ const VolunteerDashboard = () => {
                 const incRes = await api.get('/monitoring/incidents/');
                 // In a real app, we'd filter by 'assigned_volunteer == me'
                 setAssignedTasks(incRes.data.filter(i => i.status === 'verified').slice(0, 2));
+
+                const locRes = await api.get('/monitoring/responders/');
+                if (locRes.data.length > 0) {
+                    const myLoc = locRes.data[0];
+                    if (myLoc.status) {
+                        setStatus(myLoc.status.charAt(0).toUpperCase() + myLoc.status.slice(1));
+                    }
+                }
             } catch (err) {
                 console.error("Dashboard fetch error", err);
             } finally {
@@ -71,7 +79,8 @@ const VolunteerDashboard = () => {
         }
     }, [nearbySosAlerts]);
 
-    const activeIncidents = React.useMemo(() => Object.values(incidents), [incidents]);
+    const activeIncidents = React.useMemo(() => Object.values(incidents).filter(i => i.latitude && i.longitude), [incidents]);
+    const activeSOS = React.useMemo(() => Object.values(sosAlerts || {}).filter(s => s.latitude && s.longitude), [sosAlerts]);
 
     // ✅ STEP 5.3.4: Handle SOS acceptance
     const handleAcceptSOS = async (sosId) => {
@@ -146,13 +155,13 @@ const VolunteerDashboard = () => {
                     {/* Stat Highights */}
                     <div style={s.statRow}>
                         <div style={s.card}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: ACCENT }}>
-                                <div style={{ width: 40, height: 40, borderRadius: 10, background: ACCENT + '15', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Shield size={20} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: status.toLowerCase() === 'available' ? '#10b981' : '#6366f1' }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 10, background: status.toLowerCase() === 'available' ? '#10b98115' : '#6366f115', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Shield size={20} color={status.toLowerCase() === 'available' ? '#10b981' : '#6366f1'} />
                                 </div>
                                 <div>
                                     <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: TEXT_MID, textTransform: 'uppercase' }}>Duty Status</p>
-                                    <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#10b981' }}>{status}</p>
+                                    <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: status.toLowerCase() === 'available' ? '#10b981' : '#6366f1' }}>{status}</p>
                                 </div>
                             </div>
                         </div>
@@ -299,14 +308,25 @@ const VolunteerDashboard = () => {
                                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                                 <HeatmapLayer points={Object.values(locations).map(u => [u.lat, u.lng, u.intensity || 0.5])} />
                                 
+                                {/* Incident Markers (orange) */}
                                 {activeIncidents.map(inc => (
                                     <Marker key={`inc-${inc.id}`} position={[inc.latitude, inc.longitude]} icon={L.divIcon({
-                                        className: '', html: `<div style="background:#ef4444; width:12px; height:12px; border-radius:50%; border:2px solid white;"></div>`
+                                        className: '', html: `<div style="background:#f59e0b; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow: 0 0 6px rgba(245,158,11,0.6);"></div>`
                                     })}>
-                                        <Popup><b>{inc.title}</b></Popup>
+                                        <Popup><b style="color:#f59e0b">⚠ {inc.title}</b><br/><span style="font-size:11px">{inc.category_display || inc.category} · {inc.status}</span></Popup>
+                                    </Marker>
+                                ))}
+
+                                {/* SOS Markers (red pulsing) */}
+                                {activeSOS.map(sos => (
+                                    <Marker key={`sos-${sos.id}`} position={[sos.latitude, sos.longitude]} icon={L.divIcon({
+                                        className: 'sos-map-pulse', html: `<div style="background:#ef4444; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(239,68,68,0.8);"></div>`
+                                    })}>
+                                        <Popup><b style="color:#ef4444">🚨 SOS: {sos.user_name}</b><br/><span style="font-size:11px">{sos.location_name || 'Unknown'}</span></Popup>
                                     </Marker>
                                 ))}
                                 
+                                {/* Volunteer/User location markers */}
                                 {Object.values(locations).map(u => (
                                     <Marker key={`u-${u.user_id}`} position={[u.lat, u.lng]} icon={L.divIcon({
                                         className: '', html: `<div style="background:${u.role === 'volunteer' ? '#3b82f6' : '#6366f1'}; width:8px; height:8px; border-radius:50%; border:1.5px solid white;"></div>`

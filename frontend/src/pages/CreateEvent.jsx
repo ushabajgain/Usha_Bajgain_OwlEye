@@ -105,11 +105,13 @@ const SectionCard = ({ icon: Icon, title, children }) => (
     </section>
 );
 
+import { useFeedback } from '../context/FeedbackContext';
+
 const CreateEvent = () => {
+    const { showToast } = useFeedback();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [successMsg, setSuccessMsg] = useState(null);
     const [fieldErrors, setFieldErrors] = useState({});
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
@@ -254,6 +256,7 @@ const CreateEvent = () => {
         const fErrors = validate();
         if (Object.keys(fErrors).length > 0) {
             setFieldErrors(fErrors);
+            showToast("Please fix the errors in the form.", 'error');
             return;
         }
 
@@ -298,14 +301,13 @@ const CreateEvent = () => {
             }
             uploadData.append('ticket_packages', JSON.stringify(validPackages));
 
-            // POST request WITHOUT manually setting Content-Type header
-            // axios/fetch will automatically set multipart/form-data with correct boundary
-            const response = await api.post('/events/', uploadData);
+            // POST request
+            await api.post('/events/', uploadData);
 
-            setSuccessMsg('Event created successfully! Redirecting...');
+            showToast('Event created successfully! Redirecting...');
             setTimeout(() => {
                 navigate('/events');
-            }, 1500);
+            }, 1000);
         } catch (err) {
             console.error('Event creation error:', err);
             const backendData = err.response?.data;
@@ -358,17 +360,11 @@ const CreateEvent = () => {
                 {/* Body */}
                 <div style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
 
-                    {/* Error/Success Banners */}
+                    {/* Error Banner */}
                     {error && (
                         <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', gap: 8, alignItems: 'center' }}>
                             <X size={15} color="#dc2626" />
                             <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{error}</span>
-                        </div>
-                    )}
-                    {successMsg && (
-                        <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <CheckCircle size={15} color="#16a34a" />
-                            <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 600 }}>{successMsg}</span>
                         </div>
                     )}
 
