@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import C from './colors';
+import C from '../utils/colors';
 
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;

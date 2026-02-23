@@ -106,6 +106,7 @@ const SectionCard = ({ icon: Icon, title, children }) => (
 );
 
 import { useFeedback } from '../context/FeedbackContext';
+import Footer from '../components/Footer';
 
 const CreateEvent = () => {
     const { showToast } = useFeedback();
@@ -623,6 +624,7 @@ const CreateEvent = () => {
                         {loading ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Creating Event…</> : <><CheckCircle size={16} /> Create Event</>}
                     </button>
                 </div>
+                            <Footer />
             </main>
 
             {/* Map Modal */}

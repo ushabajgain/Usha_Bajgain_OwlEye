@@ -7,6 +7,7 @@ import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
 import { getRole, getToken } from '../utils/auth';
 import { usePagination, Pagination } from '../components/Pagination';
+import Footer from '../components/Footer';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -179,6 +180,7 @@ const IncidentHistory = () => {
                         onPageChange={setPage}
                     />
                 </div>
+                            <Footer />
             </main>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>

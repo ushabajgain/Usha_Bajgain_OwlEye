@@ -12,6 +12,7 @@ import 'leaflet/dist/leaflet.css';
 import api from '../utils/api';
 import C from '../utils/colors';
 import { getUserId, getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -400,6 +401,7 @@ const EventDetails = () => {
                 )}
 
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                            <Footer />
             </main>
         </div>
     );

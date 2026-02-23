@@ -144,10 +144,33 @@ temp/
 *.tmp
 *.bak
 *.backup
-.DS_Store
-Full Project/
 
 # ==========================================
+# Project Specific
+# ==========================================
+/backend/media/
+/backend/staticfiles/
+/backend/static/
+/frontend/dist/
+.venv/
+env/
+venv/
+
+# ==========================================
+# Environment & Secrets
+# ==========================================
+.env
+.env.local
+.env.*.local
+secrets.txt
+.secrets/
+
+# ==========================================
+# OS Specific
+# ==========================================
+Full Project/
+.DS_Store
+Thumbs.db
 # OS Specific
 # ==========================================
 # Windows

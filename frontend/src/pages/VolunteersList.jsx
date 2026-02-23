@@ -6,6 +6,8 @@ import api from '../utils/api';
 import C from '../utils/colors';
 import { User, Phone, Shield, ShieldCheck, Search, Loader2, MapPin, Clock, Plus, X } from 'lucide-react';
 import { useSafetySocket } from '../hooks/useSafetySocket';
+import { usePagination, Pagination } from '../components/Pagination';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -79,17 +81,25 @@ const VolunteersList = () => {
         fetchAssigned();
     }, [selectedEvent]);
 
-    // Get volunteers not yet assigned to this event
-    const unassignedVolunteers = allVolunteers.filter(
-        vol => !assignedVolunteers.some(assigned => assigned.id === vol.id)
-    );
-
     // Filter assigned volunteers by search
     const filteredAssigned = assignedVolunteers.filter(v => 
         v.full_name?.toLowerCase().includes(search.toLowerCase()) || 
         v.email?.toLowerCase().includes(search.toLowerCase()) ||
         v.phone?.includes(search)
     );
+
+    // Get unassigned volunteers and filter by search
+    const filteredUnassigned = allVolunteers.filter(
+        vol => !assignedVolunteers.some(assigned => assigned.id === vol.id)
+    ).filter(v => 
+        v.full_name?.toLowerCase().includes(search.toLowerCase()) || 
+        v.email?.toLowerCase().includes(search.toLowerCase()) ||
+        v.phone?.includes(search)
+    );
+
+    // Pagination hooks
+    const { page: assignedPage, setPage: setAssignedPage, slicedItems: paginatedAssigned } = usePagination(filteredAssigned, 12);
+    const { page: unassignedPage, setPage: setUnassignedPage, slicedItems: paginatedUnassigned } = usePagination(filteredUnassigned, 12);
 
     // Get responder status/location data
     const getResponderStatus = (volunteerId) => {
@@ -211,6 +221,7 @@ const VolunteersList = () => {
                         <Loader2 size={40} className="animate-spin" color={ACCENT} style={{ margin: '0 auto' }} />
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .animate-spin { animation: spin 1s linear infinite; }`}</style>
         </div>
@@ -290,79 +301,82 @@ const VolunteersList = () => {
                                 )}
 
                                 {filteredAssigned.length > 0 ? (
-                                    <div style={s.grid}>
-                                        {filteredAssigned.map(vol => {
-                                            const responder = getResponderStatus(vol.id);
-                                            const status = responder?.status || 'offline';
-                                            return (
-                                                <div key={vol.id} style={s.card}>
-                                                    <div style={s.cardHeader}>
-                                                        <div style={s.avatar}>{vol.full_name?.[0] || 'V'}</div>
-                                                        <div style={s.statusBadge(status)}>
-                                                            {statusColor(status).label}
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <h4 style={s.vName}>{vol.full_name}</h4>
-                                                    
-                                                    <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12, marginTop: 12 }}>
-                                                        <div style={s.infoItem}>
-                                                            <Phone size={12} /> {vol.phone || 'N/A'}
+                                    <>
+                                        <div style={s.grid}>
+                                            {paginatedAssigned.map(vol => {
+                                                const responder = getResponderStatus(vol.id);
+                                                const status = responder?.status || 'offline';
+                                                return (
+                                                    <div key={vol.id} style={s.card}>
+                                                        <div style={s.cardHeader}>
+                                                            <div style={s.avatar}>{vol.full_name?.[0] || 'V'}</div>
+                                                            <div style={s.statusBadge(status)}>
+                                                                {statusColor(status).label}
+                                                            </div>
                                                         </div>
                                                         
-                                                        {responder && (
-                                                            <>
-                                                                <div style={s.infoItem}>
-                                                                    <MapPin size={12} /> 
-                                                                    {responder.latitude?.toFixed(4)}, {responder.longitude?.toFixed(4)}
-                                                                </div>
-                                                                <div style={s.infoItem}>
-                                                                    <Clock size={12} /> 
-                                                                    {new Date(responder.last_updated).toLocaleTimeString()}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                        <h4 style={s.vName}>{vol.full_name}</h4>
+                                                        
+                                                        <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 12, marginTop: 12 }}>
+                                                            <div style={s.infoItem}>
+                                                                <Phone size={12} /> {vol.phone || 'N/A'}
+                                                            </div>
+                                                            
+                                                            {responder && (
+                                                                <>
+                                                                    <div style={s.infoItem}>
+                                                                        <MapPin size={12} /> 
+                                                                        {responder.latitude?.toFixed(4)}, {responder.longitude?.toFixed(4)}
+                                                                    </div>
+                                                                    <div style={s.infoItem}>
+                                                                        <Clock size={12} /> 
+                                                                        {new Date(responder.last_updated).toLocaleTimeString()}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
 
-                                                    <button 
-                                                        onClick={() => handleUnassign(vol.id)}
-                                                        disabled={assigning === vol.id}
-                                                        style={{...s.button(false), opacity: assigning === vol.id ? 0.6 : 1}}
-                                                    >
-                                                        {assigning === vol.id ? (
-                                                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                                <div style={{ width: 14, height: 14, border: '2px solid rgba(79,70,229,0.3)', borderTopColor: ACCENT, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                                                Removing...
-                                                            </span>
-                                                        ) : (
-                                                            <>
-                                                                <X size={14} /> 
-                                                                Unassign
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                                                        <button 
+                                                            onClick={() => handleUnassign(vol.id)}
+                                                            disabled={assigning === vol.id}
+                                                            style={{...s.button(false), opacity: assigning === vol.id ? 0.6 : 1}}
+                                                        >
+                                                            {assigning === vol.id ? (
+                                                                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                                    <div style={{ width: 14, height: 14, border: '2px solid rgba(79,70,229,0.3)', borderTopColor: ACCENT, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                                    Removing...
+                                                                </span>
+                                                            ) : (
+                                                                <>
+                                                                    <X size={14} /> 
+                                                                    Unassign
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <Pagination page={assignedPage} totalItems={filteredAssigned.length} itemsPerPage={12} onPageChange={setAssignedPage} />
+                                    </>
                                 ) : (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '40px 20px', background: CARD_BG, borderRadius: 12, border: `1px dashed ${BORDER}`, color: TEXT_MID }}>
                                         <Shield size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                                        <p>No assigned volunteers yet</p>
+                                        <p>No assigned volunteers match your criteria</p>
                                     </div>
                                 )}
                             </div>
 
                             {/* Available Volunteers Section */}
-                            {unassignedVolunteers.length > 0 && (
+                            {filteredUnassigned.length > 0 && (
                                 <div style={s.section}>
                                     <h3 style={s.sectionTitle}>
                                         <User size={18} color={ACCENT} />
-                                        Available Volunteers ({unassignedVolunteers.length})
+                                        Available Volunteers ({filteredUnassigned.length})
                                     </h3>
                                     
                                     <div style={s.grid}>
-                                        {unassignedVolunteers.map(vol => (
+                                        {paginatedUnassigned.map(vol => (
                                             <div key={vol.id} style={s.card}>
                                                 <div style={s.cardHeader}>
                                                     <div style={s.avatar}>{vol.full_name?.[0] || 'V'}</div>
@@ -396,6 +410,7 @@ const VolunteersList = () => {
                                             </div>
                                         ))}
                                     </div>
+                                    <Pagination page={unassignedPage} totalItems={filteredUnassigned.length} itemsPerPage={12} onPageChange={setUnassignedPage} />
                                 </div>
                             )}
                         </>
@@ -408,6 +423,7 @@ const VolunteersList = () => {
                         </>
                     )}
                 </div>
+                            <Footer />
             </main>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .animate-spin { animation: spin 1s linear infinite; }`}</style>
         </div>

@@ -5,6 +5,7 @@ import api from '../utils/api';
 import C from '../utils/colors';
 import { Calendar, MapPin, Ticket, Search, Loader2, Star, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -125,6 +126,7 @@ const MyEvents = () => {
                         </div>
                     )}
                 </div>
+                            <Footer />
             </main>
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>

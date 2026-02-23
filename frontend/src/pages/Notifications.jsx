@@ -10,6 +10,8 @@ import {
     NOTIFICATION_INTENT 
 } from '../utils/notificationHelper';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { usePagination, Pagination } from '../components/Pagination';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -110,6 +112,13 @@ const NotificationsPage = () => {
                 return displayList;
         }
     }, [displayList, filter]);
+
+    const { page, setPage, slicedItems: paginatedList } = usePagination(filteredList, 10);
+
+    // Reset page on filter change
+    useEffect(() => {
+        setPage(1);
+    }, [filter, setPage]);
 
     const hasUnreadItems = unreadCount > 0;
 
@@ -255,9 +264,9 @@ const NotificationsPage = () => {
                     {/* Notification items or empty state */}
                     {!loading && !error && (
                         <>
-                            {filteredList.length > 0 ? (
+                            {paginatedList.length > 0 ? (
                                 <>
-                                    {filteredList.map(item => (
+                                    {paginatedList.map(item => (
                                         <div 
                                             key={item.compositeId} 
                                             style={styles.card(item.intent)}
@@ -273,24 +282,26 @@ const NotificationsPage = () => {
                                             {!item.isRead && <div style={styles.unreadDot(item.intent)}></div>}
                                         </div>
                                     ))}
+                                    <Pagination page={page} totalItems={filteredList.length} itemsPerPage={10} onPageChange={setPage} />
                                     {hasMoreNotifs && (
-                                        <button 
-                                            onClick={loadMoreNotifications}
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px',
-                                                background: ACCENT + '10',
-                                                color: ACCENT,
-                                                border: 'none',
-                                                borderRadius: 8,
-                                                cursor: 'pointer',
-                                                fontSize: 14,
-                                                fontWeight: 600,
-                                                marginTop: 8
-                                            }}
-                                        >
-                                            Load More
-                                        </button>
+                                        <div style={{ textAlign: 'center', marginTop: 16 }}>
+                                            <button 
+                                                onClick={loadMoreNotifications}
+                                                style={{
+                                                    padding: '10px 24px',
+                                                    background: ACCENT + '10',
+                                                    color: ACCENT,
+                                                    border: 'none',
+                                                    borderRadius: 20,
+                                                    cursor: 'pointer',
+                                                    fontSize: 13,
+                                                    fontWeight: 600,
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                Fetch Older History
+                                            </button>
+                                        </div>
                                     )}
                                 </>
                             ) : (
@@ -304,6 +315,7 @@ const NotificationsPage = () => {
                         </>
                     )}
                 </div>
+                            <Footer />
             </main>
         </div>
     );

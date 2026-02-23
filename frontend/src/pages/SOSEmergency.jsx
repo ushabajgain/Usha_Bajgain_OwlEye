@@ -5,6 +5,7 @@ import api from '../utils/api';
 import C from '../utils/colors';
 import { Siren, AlertTriangle, ShieldCheck, Loader2, MapPin } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -307,6 +308,7 @@ const SOSEmergency = () => {
                         )}
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`
                 @keyframes pulse-sos {

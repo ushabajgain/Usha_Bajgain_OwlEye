@@ -44,6 +44,7 @@ const StatCard = ({ label, value, icon: Icon, color }) => (
 );
 
 import { useSearchParams } from 'react-router-dom';
+import Footer from '../components/Footer';
 
 const MyTickets = () => {
     const [searchParams] = useSearchParams();
@@ -370,18 +371,12 @@ const MyTickets = () => {
                 </div>
 
                 {/* Footer credit like in inspo */}
-                <footer style={{ padding: '20px 32px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: TEXT_MID }}>
-                    <span>Copyright © 2026 OwlEye Events</span>
-                    <div style={{ display: 'flex', gap: 16 }}>
-                        <span>Privacy Policy</span>
-                        <span>Term and conditions</span>
-                        <span>Contact</span>
-                    </div>
-                </footer>
+                
 
                 {selectedTicket && (
                     <DigitalTicket ticket={selectedTicket} onClose={() => setSelectedTicket(null)} />
                 )}
+                            <Footer />
             </main>
         </div>
     );

@@ -6,6 +6,7 @@ import html2canvas from 'html2canvas';
 import { Download, Printer, ArrowLeft, Calendar, MapPin, Hash, User, Ban, CameraOff, VolumeX, Dog, Bike, CheckCircle } from 'lucide-react';
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
+import Footer from '../components/Footer';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -172,6 +173,7 @@ const EVoucher = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
         </div>
     );

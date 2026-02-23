@@ -11,6 +11,7 @@ import {
 import api from '../utils/api';
 import C from '../utils/colors';
 import { getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const ACCENT = C.primary;
 const TEXT_DARK = C.textPrimary;
@@ -547,6 +548,7 @@ const EditEvent = () => {
                         {submitting ? <><Loader2 size={16} className="spin" /> Saving...</> : <><Save size={16} /> Save Changes</>}
                     </button>
                 </div>
+                            <Footer />
             </main>
 
             {isMapModalOpen && (

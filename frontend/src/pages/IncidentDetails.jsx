@@ -19,6 +19,7 @@ const BORDER = C.border;
 import { useSafetySocket } from '../hooks/useSafetySocket';
 
 import { useFeedback } from '../context/FeedbackContext';
+import Footer from '../components/Footer';
 
 const IncidentDetails = () => {
     const { showToast } = useFeedback();
@@ -296,6 +297,7 @@ const IncidentDetails = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>

@@ -9,6 +9,7 @@ import { Activity, Info, Loader2 } from 'lucide-react';
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
 import { getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -191,6 +192,7 @@ const CrowdHeatmap = () => {
                         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
         </div>

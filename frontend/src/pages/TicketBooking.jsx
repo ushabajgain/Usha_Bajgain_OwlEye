@@ -10,6 +10,7 @@ import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
 import { getUserId, getFullName, getEmail } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const TicketBooking = () => {
     const { id } = useParams();
@@ -360,6 +361,7 @@ const TicketBooking = () => {
                 </div>
 
                 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                            <Footer />
             </main>
         </div>
     );

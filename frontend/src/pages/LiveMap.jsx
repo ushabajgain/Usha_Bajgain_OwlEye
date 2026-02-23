@@ -24,6 +24,7 @@ import AttendeeLayer from '../components/map/AttendeeLayer';
 import RiskZoneLayer from '../components/map/RiskZoneLayer';
 import LayerControls from '../components/map/LayerControls';
 import EventBoundaries from '../components/map/EventBoundaries';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const ACCENT = C.primary;
@@ -202,7 +203,8 @@ const LiveMap = () => {
                         <Loader2 size={40} className="lm-spin" color={ACCENT} style={{ marginBottom: 16 }} />
                         <p style={{ color: TEXT_MID, fontWeight: 600 }}>Loading map data...</p>
                     </div>
-                </main>
+                                <Footer />
+            </main>
                 <style>{`.lm-spin { animation: lm-spin-kf 1s linear infinite; } @keyframes lm-spin-kf { to { transform: rotate(360deg); } }`}</style>
             </div>
         );
@@ -227,7 +229,8 @@ const LiveMap = () => {
                             Go to Events
                         </button>
                     </div>
-                </main>
+                                <Footer />
+            </main>
             </div>
         );
     }
@@ -384,6 +387,7 @@ const LiveMap = () => {
                         />
                     </div>
                 </div>
+                            <Footer />
             </main>
 
             {/* ═══ Global map CSS ═══ */}

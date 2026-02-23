@@ -8,6 +8,7 @@ import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import Footer from '../components/Footer';
 
 const PaymentSuccess = () => {
     const [searchParams] = useSearchParams();
@@ -46,6 +47,7 @@ const PaymentSuccess = () => {
                     <p style={{ fontSize: 16, color: C.textSecondary, fontWeight: 500 }}>Verifying your payment...</p>
                 </div>
                 <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+                            <Footer />
             </main>
         </div>
     );
@@ -177,6 +179,7 @@ const PaymentSuccess = () => {
                     @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
                     @keyframes scaleIn{from{transform:scale(0.5);opacity:0}to{transform:scale(1);opacity:1}}
                 `}</style>
+                            <Footer />
             </main>
         </div>
     );

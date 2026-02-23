@@ -17,6 +17,7 @@ import C from '../utils/colors';
 import { getRole, getFullName } from '../utils/auth';
 import { useSafetySocket } from '../hooks/useSafetySocket';
 import { useSafety } from '../context/SafetySocketContext';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -162,7 +163,8 @@ const AttendeeDashboard = () => {
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Loader2 size={40} color={ACCENT} style={{ animation: 'spin 1s linear infinite' }} />
                     </div>
-                </main>
+                                <Footer />
+            </main>
             </div>
         );
     }
@@ -575,6 +577,7 @@ const AttendeeDashboard = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

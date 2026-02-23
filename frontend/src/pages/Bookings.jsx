@@ -15,6 +15,7 @@ import PageHeader from '../components/PageHeader';
 import DigitalTicket from '../components/DigitalTicket';
 import api from '../utils/api';
 import { getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -355,18 +356,12 @@ const Bookings = () => {
                 </div>
 
                 {/* Footer credit like in inspo */}
-                <footer style={{ padding: '20px 32px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: TEXT_MID }}>
-                    <span>Copyright © 2026 OwlEye Events</span>
-                    <div style={{ display: 'flex', gap: 16 }}>
-                        <span>Privacy Policy</span>
-                        <span>Term and conditions</span>
-                        <span>Contact</span>
-                    </div>
-                </footer>
+                
 
                 {selectedTicket && (
                     <DigitalTicket ticket={selectedTicket} onClose={() => setSelectedTicket(null)} />
                 )}
+                            <Footer />
             </main>
         </div>
     );

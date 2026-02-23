@@ -8,6 +8,7 @@ import {
     ShieldAlert, Users, Globe, Map,
     History, CheckCircle, Loader2
 } from 'lucide-react';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -165,6 +166,7 @@ const SafetyAlertsControl = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>

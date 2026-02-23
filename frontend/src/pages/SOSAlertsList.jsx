@@ -7,6 +7,7 @@ import C from '../utils/colors';
 import { usePagination, Pagination } from '../components/Pagination';
 import { Bell, AlertTriangle, Clock, MapPin, User, ChevronRight, Loader2, Siren, Navigation, ShieldCheck, Activity, Search } from 'lucide-react';
 import { getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -358,6 +359,7 @@ const SOSAlertsList = () => {
                         />
                     )}
                 </div>
+                            <Footer />
             </main>
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

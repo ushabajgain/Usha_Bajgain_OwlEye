@@ -36,6 +36,7 @@ const HeatmapLayer = ({ points }) => {
 };
 import { getUserId, getRole, getFullName } from '../utils/auth';
 import { useSafety } from '../context/SafetySocketContext';
+import Footer from '../components/Footer';
 
 
 const CARD_BG = C.surface;
@@ -953,6 +954,7 @@ const EventDashboard = () => {
 
                     </div>
                 )}
+                            <Footer />
             </main>
             
             {/* Modal for delete confirmation */}

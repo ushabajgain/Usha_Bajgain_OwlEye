@@ -10,8 +10,10 @@ import api from '../utils/api';
 import { getRole } from '../utils/auth';
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
+import { Pagination, usePagination } from '../components/Pagination';
 
 import { jsPDF } from 'jspdf';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -283,6 +285,13 @@ const Invoices = () => {
         return matchesSearch && matchesStatus;
     });
 
+    const { page, setPage, slicedItems: paginatedInvoices } = usePagination(filteredInvoices, 10);
+
+    // Reset pagination on filter change
+    useEffect(() => {
+        setPage(1);
+    }, [searchQuery, statusFilter, setPage]);
+
     const s = {
         shell: { display: 'flex', minHeight: '100vh', background: CONTENT_BG, fontFamily: "'Inter','Segoe UI',sans-serif", overflowX: 'hidden' },
         main: { flex: 1, marginLeft: 230, display: 'flex', flexDirection: 'column', minWidth: 0 },
@@ -366,23 +375,28 @@ const Invoices = () => {
                             <div style={{ maxHeight: 600, overflowY: 'auto' }}>
                                 {loading ? (
                                     <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} /></div>
-                                ) : filteredInvoices.length > 0 ? filteredInvoices.map((inv, i) => (
-                                    <button key={i} onClick={() => setSelectedInv(inv)} style={s.invItem(selectedInv?.id === inv.id)}>
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ fontSize: 14, fontWeight: 800, color: TEXT_DARK, margin: '0 0 6px' }}>{inv.id}</p>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <CalendarIcon size={12} color={TEXT_MID} />
-                                                <span style={{ fontSize: 11, color: TEXT_MID, fontWeight: 600 }}>{inv.date}</span>
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <p style={{ fontSize: 14, fontWeight: 800, color: ACCENT, margin: '0 0 6px' }}>{inv.amount}</p>
-                                            <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: inv.status === 'Paid' ? '#f0fdf4' : '#eff6ff', color: inv.status === 'Paid' ? '#16a34a' : ACCENT }}>
-                                                {inv.status}
-                                            </span>
-                                        </div>
-                                    </button>
-                                )) : (
+                                ) : filteredInvoices.length > 0 ? (
+                                    <>
+                                        {paginatedInvoices.map((inv, i) => (
+                                            <button key={i} onClick={() => setSelectedInv(inv)} style={s.invItem(selectedInv?.id === inv.id)}>
+                                                <div style={{ flex: 1 }}>
+                                                    <p style={{ fontSize: 14, fontWeight: 800, color: TEXT_DARK, margin: '0 0 6px' }}>{inv.id}</p>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <CalendarIcon size={12} color={TEXT_MID} />
+                                                        <span style={{ fontSize: 11, color: TEXT_MID, fontWeight: 600 }}>{inv.date}</span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <p style={{ fontSize: 14, fontWeight: 800, color: ACCENT, margin: '0 0 6px' }}>{inv.amount}</p>
+                                                    <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: inv.status === 'Paid' ? '#f0fdf4' : '#eff6ff', color: inv.status === 'Paid' ? '#16a34a' : ACCENT }}>
+                                                        {inv.status}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                        <Pagination page={page} totalItems={filteredInvoices.length} itemsPerPage={10} onPageChange={setPage} />
+                                    </>
+                                ) : (
                                     <div style={{ padding: '40px 10px', textAlign: 'center', color: TEXT_MID }}>No invoices found.</div>
                                 )}
                             </div>
@@ -566,13 +580,8 @@ const Invoices = () => {
                     </div>
                 </div>
 
-                <footer style={{ padding: '24px 32px', borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: TEXT_MID, fontWeight: 600 }}>
-                    <span>Copyright © 2026 OwlEye Events</span>
-                    <div style={{ display: 'flex', gap: 24 }}>
-                        <span>Privacy Policy</span>
-                        <span>Term and conditions</span>
-                    </div>
-                </footer>
+                
+                            <Footer />
             </main>
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>

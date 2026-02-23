@@ -17,6 +17,7 @@ const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
 import { useFeedback } from '../context/FeedbackContext';
+import Footer from '../components/Footer';
 
 const UserManagement = () => {
     const { showToast } = useFeedback();
@@ -175,6 +176,7 @@ const UserManagement = () => {
                         onPageChange={setPage}
                     />
                 </div>
+                            <Footer />
             </main>
         </div>
     );

@@ -12,6 +12,8 @@ import {
     CheckCircle, MessageSquare, Maximize2
 } from 'lucide-react';
 
+import SOSMarkers from '../components/map/SOSMarkers';
+
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
 const ACCENT = '#ef4444'; 
@@ -19,17 +21,12 @@ const TEXT_DARK = C.textPrimary;
 const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
-// Custom Flashing Icon
-const flashingIcon = L.divIcon({
-    className: 'sos-marker-container',
-    html: `<div class="sos-marker-inner"></div><div class="sos-marker-pulse"></div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15]
-});
+
 
 import { useSafetySocket } from '../hooks/useSafetySocket';
 
 import { useFeedback } from '../context/FeedbackContext';
+import Footer from '../components/Footer';
 
 const SOSMonitoringCenter = () => {
     const { showToast } = useFeedback();
@@ -46,12 +43,17 @@ const SOSMonitoringCenter = () => {
                 await api.patch(`/monitoring/sos/${id}/`, { status: 'resolved' });
                 showToast("SOS alert marked as resolved.");
             } else if (action === 'assign') {
-                await api.patch(`/monitoring/sos/${id}/`, { status: 'assigned' });
-                showToast("Responder dispatched to SOS location.");
+                const res = await api.post(`/monitoring/sos/${id}/dispatch_assistance/`);
+                if (res.data.success) {
+                    showToast(res.data.message);
+                } else {
+                    showToast("Could not find a nearby volunteer.", "error");
+                }
             }
         } catch (err) {
             console.error("SOS Action failed", err);
-            showToast("Failed to process SOS action.", 'error');
+            const msg = err.response?.data?.message || err.response?.data?.error || "Failed to process SOS action.";
+            showToast(msg, 'error');
         }
     };
 
@@ -129,15 +131,22 @@ const SOSMonitoringCenter = () => {
 
                                     <div style={{ display: 'flex', gap: 10 }}>
                                         {a.status === 'reported' && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'assign'); }}
-                                                style={{ flex: 1, padding: '14px', borderRadius: 10, background: ACCENT, color: '#fff', border: 'none', fontWeight: 800, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                                <Radio size={16} /> Assign
-                                            </button>
+                                            <>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'assign'); }}
+                                                    style={{ flex: 1, padding: '14px', borderRadius: 10, background: ACCENT, color: '#fff', border: 'none', fontWeight: 800, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                                    <Radio size={16} /> Assign
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'resolve'); }} style={{ flex: '0 0 50px', padding: '14px', background: '#f0fdf4', color: '#16a34a', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                                    <CheckCircle size={20} />
+                                                </button>
+                                            </>
                                         )}
-                                        <button onClick={(e) => { e.stopPropagation(); handleAction(a.id, 'resolve'); }} style={{ flex: a.status === 'reported' ? '0 0 50px' : 1, padding: '14px', background: '#f0fdf4', color: '#16a34a', border: 'none', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                                            <CheckCircle size={20} /> {a.status !== 'reported' && <span style={{fontSize: 14, fontWeight: 800}}>Resolve</span>}
-                                        </button>
+                                        {a.status !== 'reported' && (
+                                            <div style={{ flex: 1, padding: '14px', background: '#f8fafc', color: TEXT_MID, border: `1px solid ${BORDER}`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, fontWeight: 800 }}>
+                                                <Loader2 size={16} className="animate-spin" /> Awaiting Volunteer Resolution
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))
@@ -153,21 +162,7 @@ const SOSMonitoringCenter = () => {
                             zoomControl={false}
                         >
                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                            {alerts.map(a => (
-                                <Marker 
-                                    key={a.id} 
-                                    position={[a.latitude || 27.7, a.longitude || 85.3]} 
-                                    icon={flashingIcon}
-                                >
-                                    <Popup>
-                                        <div style={{ padding: 4 }}>
-                                            <strong style={{ color: ACCENT }}>SOS: {a.user_name}</strong>
-                                            <p style={{ margin: '4px 0', fontSize: 12 }}>{a.event_name}</p>
-                                            <button onClick={() => handleAction(a.id, 'resolve')} style={{ width: '100%', background: ACCENT, color: '#fff', border: 'none', padding: '6px', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>Resolve</button>
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            ))}
+                            <SOSMarkers sosAlerts={alerts} />
                         </MapContainer>
                         <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 1000, background: 'rgba(15,23,42,0.9)', padding: '12px 16px', borderRadius: 16, color: '#fff', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)' }}>
                             <div style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: 8 }}>Global Status</div>
@@ -178,18 +173,61 @@ const SOSMonitoringCenter = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`
-                .sos-marker-container { position: relative; }
-                .sos-marker-inner { width: 14px; height: 14px; background: ${ACCENT}; border: 3px solid #fff; border-radius: 50%; position: absolute; top: 8px; left: 8px; z-index: 2; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-                .sos-marker-pulse { width: 30px; height: 30px; background: ${ACCENT}; opacity: 0.6; border-radius: 50%; position: absolute; top: 0; left: 0; animation: sos-pulse 1.5s infinite ease-out; }
-                @keyframes sos-pulse { 
-                    0% { transform: scale(0.5); opacity: 0.8; }
-                    100% { transform: scale(2.5); opacity: 0; }
+                /* SOS Marker Animations */
+                .sos-marker-wrap {
+                    position: relative;
+                    width: 44px;
+                    height: 44px;
                 }
-                @keyframes sos-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+                .sos-pulse-ring {
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 44px; height: 44px;
+                    border-radius: 50%;
+                    background: rgba(239, 68, 68, 0.4);
+                    animation: sos-pulse-kf 1.5s ease-out infinite;
+                }
+                .sos-pulse-ring-delayed {
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 44px; height: 44px;
+                    border-radius: 50%;
+                    background: rgba(239, 68, 68, 0.25);
+                    animation: sos-pulse-kf 1.5s ease-out infinite 0.4s;
+                }
+                .sos-core-dot {
+                    position: absolute;
+                    top: 12px; left: 12px;
+                    width: 20px; height: 20px;
+                    border-radius: 50%;
+                    background: #ef4444;
+                    border: 3px solid #fff;
+                    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.6);
+                    z-index: 2;
+                }
+                @keyframes sos-pulse-kf {
+                    0% { transform: scale(0.5); opacity: 1; }
+                    100% { transform: scale(2.2); opacity: 0; }
+                }
+                @keyframes sos-blink {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.3; }
+                }
                 .animate-spin { animation: spin 1s linear infinite; }
                 @keyframes spin { to { transform: rotate(360deg); } }
+                
+                /* Leaflet popup overrides */
+                .leaflet-popup-content-wrapper {
+                    border-radius: 12px !important;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+                }
+                .leaflet-popup-content {
+                    margin: 12px 14px !important;
+                    font-family: 'Inter','Segoe UI',sans-serif !important;
+                }
             `}</style>
         </div>
     );

@@ -58,7 +58,6 @@ python-dateutil==2.9.0.post0
 # ==========================================
 gunicorn==21.2.0
 whitenoise==6.6.0
-psycopg2-binary==2.9.9
 
 # ==========================================
 # DEVELOPMENT & DEBUGGING
@@ -66,6 +65,7 @@ psycopg2-binary==2.9.9
 django-extensions==3.2.3
 django-debug-toolbar==4.3.0
 ipython==8.18.1
+Werkzeug==3.0.1
 
 # ==========================================
 # TESTING (Optional)

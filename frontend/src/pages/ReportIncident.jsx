@@ -8,6 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
+import Footer from '../components/Footer';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -448,6 +449,7 @@ const ReportIncident = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`.spin { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         </div>

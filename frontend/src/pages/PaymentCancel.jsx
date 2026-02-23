@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import PageHeader from '../components/PageHeader';
 import api from '../utils/api';
 import C from '../utils/colors';
+import Footer from '../components/Footer';
 
 const PaymentCancel = () => {
     const [searchParams] = useSearchParams();
@@ -85,6 +86,7 @@ const PaymentCancel = () => {
                 <style>{`
                     @keyframes scaleIn{from{transform:scale(0.5);opacity:0}to{transform:scale(1);opacity:1}}
                 `}</style>
+                            <Footer />
             </main>
         </div>
     );

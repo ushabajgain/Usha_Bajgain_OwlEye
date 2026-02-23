@@ -10,9 +10,9 @@ const createTacticalIcon = (color, isSOS = false) => {
     try {
         return L.divIcon({
             html: `
-                <div class="relative flex items-center justify-center w-10 h-10 rounded-[1rem] bg-slate-950 border-2 border-${color}-500 shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all">
+                <div class="relative flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-950 border-2 border-${color}-500 shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all">
                     <div class="w-2 h-2 rounded-full bg-${color}-500 ${isSOS ? 'animate-ping' : ''}"></div>
-                    ${isSOS ? `<div class="absolute inset-0 rounded-[1rem] bg-red-500/10 animate-pulse ring-4 ring-red-500/5"></div>` : ''}
+                    ${isSOS ? `<div class="absolute inset-0 rounded-2xl bg-red-500/10 animate-pulse ring-4 ring-red-500/5"></div>` : ''}
                 </div>
             `,
             className: 'tactical-div-icon',
@@ -158,7 +158,7 @@ const TacticalMapLayer = ({ eventId }) => {
                         icon={createTacticalIcon('orange')}
                     >
                         <Popup className="tactical-popup">
-                            <div className="p-4 bg-[#020617] text-white rounded-2xl border border-orange-500/40 min-w-[220px]">
+                            <div className="p-4 bg-[#020617] text-white rounded-2xl border border-orange-500/40 min-w-55">
                                 <div className="flex justify-between items-start mb-4">
                                     <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-500 uppercase">{inc.priority} Threat</span>
                                     <AlertTriangle size={14} className="text-orange-500" />
@@ -179,7 +179,7 @@ const TacticalMapLayer = ({ eventId }) => {
                         icon={createTacticalIcon('red', true)}
                     >
                         <Popup className="tactical-popup">
-                            <div className="p-6 text-center bg-[#020617] text-white rounded-[2rem] border border-red-500/50 min-w-[240px] shadow-3xl">
+                            <div className="p-6 text-center bg-[#020617] text-white rounded-4xl border border-red-500/50 min-w-60 shadow-3xl">
                                 <div className="w-14 h-14 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500 mx-auto mb-4 animate-pulse">
                                     <LifeBuoy size={28} />
                                 </div>
@@ -216,7 +216,7 @@ const TacticalMapLayer = ({ eventId }) => {
             </MapContainer>
 
             {/* In-Map Tactical Overlays */}
-            <div className="absolute top-8 right-8 flex flex-col gap-3 z-[1000]">
+            <div className="absolute top-8 right-8 flex flex-col gap-3 z-1000">
                 <button className="w-14 h-14 bg-slate-900/80 backdrop-blur-xl text-slate-400 hover:text-white rounded-2xl border border-slate-800 flex items-center justify-center transition-all shadow-3xl">
                     <Crosshair size={20} />
                 </button>

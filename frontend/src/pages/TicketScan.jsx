@@ -7,6 +7,7 @@ import { QrCode, CheckCircle, XCircle, Users, RefreshCw } from 'lucide-react';
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
 import { getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const HEADER_BG = C.navy;
 const CONTENT_BG = C.background;
@@ -139,6 +140,7 @@ const TicketScan = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
             <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
         </div>

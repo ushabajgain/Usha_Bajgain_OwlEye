@@ -40,6 +40,7 @@ const sosIcon = L.divIcon({
 });
 
 import { useSafety } from '../context/SafetySocketContext';
+import Footer from '../components/Footer';
 
 const HeatmapLayer = ({ points }) => {
     const map = useMap();
@@ -351,6 +352,7 @@ const AdminDashboard = () => {
                     </div>
                 </div>
                 )}
+                            <Footer />
             </main>
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

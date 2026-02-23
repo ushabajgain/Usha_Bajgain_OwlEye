@@ -10,6 +10,7 @@ import {
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -250,6 +251,7 @@ const GlobalFinances = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
         </div>
     );

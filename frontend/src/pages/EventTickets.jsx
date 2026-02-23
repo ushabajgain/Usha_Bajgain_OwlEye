@@ -8,6 +8,7 @@ import api from '../utils/api';
 import C from '../utils/colors';
 import { Loader2, Download, ArrowLeft, X } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -119,7 +120,8 @@ const EventTickets = () => {
                         <Loader2 size={40} style={{ color: ACCENT, animation: 'spin 1s linear infinite', display: 'inline-block', marginBottom: 16 }} />
                         <p style={{ fontSize: 14, color: TEXT_MID, margin: 0 }}>Loading tickets...</p>
                     </div>
-                </main>
+                                <Footer />
+            </main>
                 <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
         );
@@ -141,7 +143,8 @@ const EventTickets = () => {
                             <button onClick={() => navigate('/attendee/my-events')} style={{ padding: '10px 24px', background: ACCENT, color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>Go Back to My Events</button>
                         </div>
                     </div>
-                </main>
+                                <Footer />
+            </main>
             </div>
         );
     }
@@ -176,7 +179,8 @@ const EventTickets = () => {
                             </button>
                         </div>
                     </div>
-                </main>
+                                <Footer />
+            </main>
                 <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
         );
@@ -244,6 +248,7 @@ const EventTickets = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
         </div>
     );

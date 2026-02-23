@@ -14,6 +14,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import { useSafety } from '../context/SafetySocketContext';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -350,6 +351,7 @@ const VolunteerDashboard = () => {
                     </div>
                 </div>
                 )}
+                            <Footer />
             </main>
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

@@ -9,6 +9,7 @@ import {
     User, AlertTriangle, Search, Filter, 
     AlertCircle, CheckCircle, Clock, Zap 
 } from 'lucide-react';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -369,6 +370,7 @@ const GlobalAuditLogs = () => {
                         )}
                     </div>
                 </div>
+                            <Footer />
             </main>
         </div>
     );

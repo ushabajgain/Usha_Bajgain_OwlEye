@@ -11,6 +11,7 @@ import {
     User, Loader2, CheckCircle, ArrowRight, Search
 } from 'lucide-react';
 import { useFeedback } from '../context/FeedbackContext';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -215,6 +216,7 @@ const IncidentControlCenter = () => {
                         onPageChange={setPage}
                     />
                 </div>
+                            <Footer />
             </main>
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>

@@ -7,6 +7,7 @@ import api from '../utils/api';
 import C from '../utils/colors';
 import { Loader2, Download, Share2, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import Footer from '../components/Footer';
 
 const CONTENT_BG = C.background;
 const CARD_BG = C.surface;
@@ -93,7 +94,8 @@ const TicketDetails = () => {
                         <Loader2 size={40} style={{ color: ACCENT, animation: 'spin 1s linear infinite', display: 'inline-block', marginBottom: 16 }} />
                         <p style={{ fontSize: 14, color: TEXT_MID, margin: 0 }}>Loading ticket...</p>
                     </div>
-                </main>
+                                <Footer />
+            </main>
                 <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
         );
@@ -115,7 +117,8 @@ const TicketDetails = () => {
                             <button onClick={() => navigate('/attendee/my-events')} style={{ padding: '10px 24px', background: ACCENT, color: '#fff', borderRadius: 8, border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>Go Back to My Events</button>
                         </div>
                     </div>
-                </main>
+                                <Footer />
+            </main>
             </div>
         );
     }
@@ -206,6 +209,7 @@ const TicketDetails = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
         </div>
     );

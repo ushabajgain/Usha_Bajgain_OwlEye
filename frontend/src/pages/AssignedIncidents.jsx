@@ -14,6 +14,7 @@ const TEXT_MID = C.textSecondary;
 const BORDER = C.border;
 
 import { useFeedback } from '../context/FeedbackContext';
+import Footer from '../components/Footer';
 
 const AssignedIncidents = () => {
     const { showToast, confirmAction } = useFeedback();
@@ -155,6 +156,7 @@ const AssignedIncidents = () => {
                         ))
                     )}
                 </div>
+                            <Footer />
             </main>
             <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>

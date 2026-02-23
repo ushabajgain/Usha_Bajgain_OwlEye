@@ -15,6 +15,7 @@ import api from '../utils/api';
 import C from '../utils/colors';
 import PageHeader from '../components/PageHeader';
 import { getRole } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const SIDEBAR_W = 230;
 const CONTENT_BG = C.background;
@@ -478,6 +479,7 @@ const EventsFeed = () => {
                         </div>
                     </div>
                 )}
+                            <Footer />
             </main>
             <style>{`
                 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

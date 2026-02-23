@@ -9,6 +9,7 @@ import C from '../utils/colors';
 import api from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { clearAuth } from '../utils/auth';
+import Footer from '../components/Footer';
 
 const Settings = () => {
     const navigate = useNavigate();
@@ -204,6 +205,7 @@ const Settings = () => {
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Loader2 className="animate-spin" size={40} color={C.primary} />
                 </div>
+                            <Footer />
             </main>
         </div>
     );
@@ -303,6 +305,7 @@ const Settings = () => {
                         </div>
                     </div>
                 </div>
+                            <Footer />
             </main>
         </div>
     );
