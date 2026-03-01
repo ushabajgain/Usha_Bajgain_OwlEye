@@ -228,7 +228,7 @@ const Register = () => {
                 {/* Left: form */}
                 <div style={s.left}>
                     <div style={s.logo}>
-                        <div style={s.logoIcon}><Eye size={20} color="#fff" /></div>
+                        <img src="/assets/OwlEye_LOGO.jpeg" alt="OwlEye Logo" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover' }} />
                         <span style={s.logoText}>OwlEye</span>
                     </div>
 
@@ -353,9 +353,10 @@ const Register = () => {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             marginBottom: 20, border: '1px solid rgba(255,255,255,0.2)',
                             margin: '0 auto 20px',
-                            animation: 'pulse 3s infinite'
+                            animation: 'pulse 3s infinite',
+                            overflow: 'hidden'
                         }}>
-                            <Eye size={30} color="#fff" />
+                            <img src="/assets/OwlEye_LOGO.jpeg" alt="OwlEye" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                         <h2 style={{ fontSize: 24, fontWeight: 900, color: '#fff', textAlign: 'center', marginBottom: 8 }}>Join the Ecosystem</h2>
                         <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 1.5, maxWidth: 260, marginBottom: 24 }}>

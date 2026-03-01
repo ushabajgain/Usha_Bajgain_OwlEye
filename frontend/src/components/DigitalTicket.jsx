@@ -43,31 +43,20 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
             const height = element.offsetHeight;
 
             const canvas = await html2canvas(element, {
-                width: width,
-                height: height,
-                scale: 2,
+                scale: 3,
                 useCORS: true,
-                backgroundColor: null,
+                backgroundColor: null, // Maintain transparency for cutouts if needed, or set to #EAEBFF
                 logging: false,
-                imageTimeout: 15000,
+                imageTimeout: 10000,
                 allowTaint: false,
-                windowHeight: height,
-                windowWidth: width,
-                foreignObjectRendering: true,
                 onclone: (clonedDocument) => {
                     const clonedElement = clonedDocument.getElementById('digital-ticket-container');
                     if (clonedElement) {
                         clonedElement.style.margin = '0';
                         clonedElement.style.padding = '0';
-                        clonedElement.style.position = 'relative';
                         clonedElement.style.display = 'flex';
-                        
-                        const imgs = clonedElement.querySelectorAll('img');
-                        imgs.forEach(img => {
-                            img.style.margin = '0';
-                            img.style.padding = '0';
-                            img.style.display = 'block';
-                        });
+                        clonedElement.style.transform = 'none';
+                        clonedElement.style.boxShadow = 'none';
                     }
                 }
             });
@@ -151,21 +140,13 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
                     }}>
                         {event.name}
                     </h1>
-                    {/* Category badge */}
                     <div style={{
-                        display: 'inline-block',
-                        background: 'rgba(17, 14, 58, 0.85)',
-                        color: '#fff',
-                        height: '22px',
-                        lineHeight: '22px',
-                        padding: '0 14px',
-                        borderRadius: '11px',
-                        border: 'rgba(255,255,255,0.15)',
-                        fontSize: '10px',
+                        fontSize: '11px',
                         fontWeight: '700',
+                        color: 'rgba(255,255,255,0.85)',
                         letterSpacing: '0.05em',
-                        textTransform: 'capitalize',
-                        textAlign: 'center'
+                        textTransform: 'uppercase',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.5)'
                     }}>
                         {event.category || 'Event'}
                     </div>
@@ -211,7 +192,11 @@ const DigitalTicket = ({ ticket, onClose, showModal = true }) => {
                     <div style={{ fontSize: 10, fontWeight: 800, color: labelColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
                         Ticket Type:
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: pkg.color || C.primary }}>
+                    <div style={{ 
+                        fontSize: 16, 
+                        fontWeight: 800, 
+                        color: pkg.color || (pkg.name?.toLowerCase().includes('vip') ? '#ec4899' : C.primary) 
+                    }}>
                         {pkg.name}
                     </div>
                 </div>

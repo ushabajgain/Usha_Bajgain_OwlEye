@@ -59,23 +59,13 @@ const TicketCard = ({ ticket }) => {
                     }}>
                         {event.name}
                     </h1>
-                    {/* Category badge */}
                     <div style={{
-                        display: 'inline-block',
-                        background: 'rgba(17, 14, 58, 0.85)',
-                        color: '#fff',
-                        height: '24px',
-                        lineHeight: '24px',
-                        padding: '0 14px',
-                        borderRadius: '12px',
-                        border: 'rgba(255,255,255,0.15) 1px solid',
                         fontSize: '11px',
                         fontWeight: '700',
+                        color: 'rgba(255,255,255,0.85)',
                         letterSpacing: '0.05em',
-                        textTransform: 'capitalize',
-                        textAlign: 'center',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '100%'
+                        textTransform: 'uppercase',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.5)'
                     }}>
                         {event.category || 'Event'}
                     </div>
@@ -92,6 +82,19 @@ const TicketCard = ({ ticket }) => {
                 borderRight: `2px dashed ${sep}`,
                 position: 'relative'
             }}>
+                {/* Punch-out cutouts */}
+                <div style={{
+                    position: 'absolute', width: 28, height: 28,
+                    background: '#0a0a0f',
+                    borderRadius: '50%', right: -14, top: -14, zIndex: 10,
+                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4)'
+                }} />
+                <div style={{
+                    position: 'absolute', width: 28, height: 28,
+                    background: '#0a0a0f',
+                    borderRadius: '50%', right: -14, bottom: -14, zIndex: 10,
+                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4)'
+                }} />
 
                 {/* Row: Attendee */}
                 <div style={{ borderBottom: `1px solid ${sep}`, paddingBottom: 14, marginBottom: 14 }}>
@@ -108,7 +111,11 @@ const TicketCard = ({ ticket }) => {
                     <div style={{ fontSize: 10, fontWeight: 800, color: labelColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
                         Ticket Type:
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: pkg.color || C.primary }}>
+                    <div style={{ 
+                        fontSize: 16, 
+                        fontWeight: 800, 
+                        color: pkg.color || (pkg.name?.toLowerCase().includes('vip') ? '#ec4899' : C.primary) 
+                    }}>
                         {pkg.name}
                     </div>
                 </div>
@@ -125,18 +132,21 @@ const TicketCard = ({ ticket }) => {
 
                 {/* Row: Date */}
                 <div style={{ borderBottom: `1px solid ${sep}`, paddingBottom: 14, marginBottom: 14 }}>
-                    <div style={{ fontSize: 10, fontWeight: 800, color: labelColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: labelColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
                         Date:
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: valueColor, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Calendar size={18} style={{ flexShrink: 0 }} /> {formatDate(event.start_datetime)}
+                    <div style={{ fontSize: 15, fontWeight: 800, color: valueColor }}>
+                        {formatDate(event.start_datetime)}
                     </div>
                 </div>
 
                 {/* Row: Time */}
                 <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: valueColor, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Clock size={18} style={{ flexShrink: 0 }} /> {formatTime(event.start_datetime)} – {formatTime(event.end_datetime)}
+                    <div style={{ fontSize: 10, fontWeight: 800, color: labelColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                        Time:
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: valueColor }}>
+                        {formatTime(event.start_datetime)} – {formatTime(event.end_datetime)}
                     </div>
                 </div>
             </div>

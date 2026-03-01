@@ -186,7 +186,7 @@ const Login = () => {
                 {/* Left: form */}
                 <div style={s.left}>
                     <div style={s.logo}>
-                        <div style={s.logoIcon}><Eye size={22} color="#fff" /></div>
+                        <img src="/assets/OwlEye_LOGO.jpeg" alt="OwlEye Logo" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover' }} />
                         <span style={s.logoText}>OwlEye</span>
                     </div>
 
@@ -322,9 +322,10 @@ const Login = () => {
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             marginBottom: 20, border: '1px solid rgba(255,255,255,0.2)',
                             margin: '0 auto 20px',
-                            animation: 'pulse 3s infinite ease-in-out'
+                            animation: 'pulse 3s infinite ease-in-out',
+                            overflow: 'hidden'
                         }}>
-                            <Eye size={32} color="#fff" />
+                            <img src="/assets/OwlEye_LOGO.jpeg" alt="OwlEye" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                         <h2 style={{ fontSize: 26, fontWeight: 900, color: '#fff', marginBottom: 12, letterSpacing: '-0.02em' }}>OwlEye Intelligence</h2>
                         <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.6, maxWidth: 280, margin: '0 auto 32px' }}>

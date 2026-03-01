@@ -109,7 +109,7 @@ const ForgotPassword = () => {
                 </Link>
 
                 <div style={s.logo}>
-                    <div style={s.logoIcon}><Eye size={22} color="#fff" /></div>
+                    <img src="/assets/OwlEye_LOGO.jpeg" alt="OwlEye Logo" style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'cover' }} />
                     <span style={s.logoText}>OwlEye</span>
                 </div>
 

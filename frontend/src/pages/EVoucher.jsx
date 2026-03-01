@@ -35,8 +35,20 @@ const EVoucher = () => {
     };
 
     const handleDownload = async () => {
-        if (!ticketRef.current) return;
-        const canvas = await html2canvas(ticketRef.current, { useCORS: true, scale: 3, backgroundColor: '#fff' });
+        const images = ticketRef.current.querySelectorAll('img');
+        await Promise.all(Array.from(images).map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+        }));
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const canvas = await html2canvas(ticketRef.current, { 
+            useCORS: true, 
+            scale: 3, 
+            backgroundColor: null,
+            imageTimeout: 10000 
+        });
         const link = document.createElement('a');
         link.download = `Ticket_${ticketData.invoiceId}.png`;
         link.href = canvas.toDataURL('image/png');

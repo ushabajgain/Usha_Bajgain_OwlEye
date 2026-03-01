@@ -53,12 +53,27 @@ const TicketDetails = () => {
         setIsDownloading(true);
         try {
             await new Promise(resolve => setTimeout(resolve, 200));
+            const images = element.querySelectorAll('img');
+            await Promise.all(Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+            }));
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             const canvas = await html2canvas(element, {
                 scale: 3,
                 useCORS: true,
-                backgroundColor: '#EAEBFF',
+                backgroundColor: null,
                 logging: false,
-                imageTimeout: 0,
+                imageTimeout: 10000,
+                onclone: (clonedDoc) => {
+                    const clonedEl = clonedDoc.getElementById('digital-ticket-container');
+                    if (clonedEl) {
+                        clonedEl.style.boxShadow = 'none';
+                        clonedEl.style.transform = 'none';
+                    }
+                }
             });
 
             const shortId = (ticket.id || 'ticket').toString().split('-')[0];

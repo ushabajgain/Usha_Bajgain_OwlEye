@@ -34,7 +34,7 @@ const EventTickets = () => {
     const fetchEventAndTickets = async () => {
         setLoading(true);
         try {
-            const ticketsRes = await api.get(`/tickets/organizer-tickets/`);
+            const ticketsRes = await api.get(`/tickets/my-tickets/`);
             
             const eventTickets = ticketsRes.data.filter(t => t.event_details?.id === parseInt(eventId));
             
@@ -70,18 +70,28 @@ const EventTickets = () => {
             await new Promise(resolve => setTimeout(resolve, 500));
 
             const ticketElement = tempContainer.querySelector('#digital-ticket-container');
-            
-            if (!ticketElement) {
-                throw new Error('Failed to render ticket');
-            }
+            if (!ticketElement) throw new Error('Failed to render ticket');
+
+            const images = ticketElement.querySelectorAll('img');
+            await Promise.all(Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+            }));
+
+            await new Promise(resolve => setTimeout(resolve, 500));
 
             const canvas = await html2canvas(ticketElement, {
                 scale: 3,
                 useCORS: true,
-                backgroundColor: '#EAEBFF',
+                backgroundColor: null,
                 logging: false,
-                imageTimeout: 0,
-                allowTaint: true,
+                imageTimeout: 10000,
+                onclone: (clonedDoc) => {
+                    const clonedEl = clonedDoc.getElementById('digital-ticket-container');
+                    if (clonedEl) {
+                        clonedEl.style.boxShadow = 'none';
+                    }
+                }
             });
 
             const shortId = (ticket.id || 'ticket').toString().split('-')[0];

@@ -1,6 +1,4 @@
-# ==========================================
 # OS & System Files
-# ==========================================
 .DS_Store
 .DS_Store?
 ._*
@@ -11,12 +9,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
-.AppleDouble
-.LSOverride
 
-# ==========================================
 # Python & Django
-# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -28,34 +22,28 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.log
+local_settings.py
+db.sqlite3
+*.sqlite3
 
 # Virtual Environments
 env/
 venv/
 .venv/
 ENV/
-env.bak/
-venv.bak/
-.env
-.env.local
-.env.*.local
+*.bak
+*.backup
 
-# Django specific
-*.log
-local_settings.py
-/media/
-/staticfiles/
-/static/
-db.sqlite3
-*.sqlite3
+# Project Specific Paths (Backend)
 /backend/media/
 /backend/staticfiles/
 /backend/static/
-/backend/local_settings.py
+/backend/.env
+/backend/.env.*
+!.backend/.env.example
 
-# ==========================================
 # Node.js & Frontend (Vite/React)
-# ==========================================
 node_modules/
 /frontend/node_modules/
 /frontend/dist/
@@ -63,34 +51,21 @@ node_modules/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
-
-# NPM/Yarn/PNPM logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
 .pnpm-debug.log*
 
-# Vite
+# Vite & Build
 .vite/
 dist-ssr/
-
-# ==========================================
-# Build & Cache
-# ==========================================
 .cache/
-.parcel-cache/
 .eslintcache
 .turbo/
 .ruff_cache/
 .mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
 
-# ==========================================
 # Testing
-# ==========================================
 .pytest_cache/
 .coverage
 .coverage.*
@@ -98,102 +73,24 @@ coverage/
 htmlcov/
 .nyc_output/
 test-results/
-blob-report/
-playwright-report/
 
-# ==========================================
 # IDEs & Editors
-# ==========================================
 .vscode/
 !.vscode/extensions.json
 .idea/
-.project
-.pydevproject
-.settings/
-.sublime-project
-.sublime-workspace
 *.iml
 *.suo
-*.ntvs*
-*.njsproj
 *.sln
 *.code-workspace
-.DS_Store.AppleDouble
-.LSOverride
 
-# ==========================================
-# Lock Files
-# ==========================================
-*.lock
-*.lockb
-
-# ==========================================
-# Database
-# ==========================================
-*.db
-*.sqlite
-*.sqlite3
-*.sql
-
-# ==========================================
-# Temporary & Backup Files
-# ==========================================
-.tmp/
-tmp/
-temp/
-*.tmp
-*.bak
-*.backup
-
-# ==========================================
-# Project Specific
-# ==========================================
-/backend/media/
-/backend/staticfiles/
-/backend/static/
-/frontend/dist/
-.venv/
-env/
-venv/
-
-# ==========================================
-# Environment & Secrets
-# ==========================================
+# Secrets & Environment (Global)
 .env
 .env.local
 .env.*.local
 secrets.txt
 .secrets/
-
-# ==========================================
-# OS Specific
-# ==========================================
-Full Project/
-.DS_Store
-Thumbs.db
-# OS Specific
-# ==========================================
-# Windows
-Thumbs.db
-ehthumbs.db
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Linux
-.directory
-
-# ==========================================
-# Project Specific
-# ==========================================
-/.venv
-/venv
 *.pem
 *.key
 *.crt
-.env.*
-!.env.example
 secrets.json
-
+! .env.example

@@ -39,6 +39,11 @@ import Settings from './pages/Settings';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
 import HomePage from './pages/HomePage';
+import Platform from './pages/Platform';
+import SafetyNetwork from './pages/SafetyNetwork';
+import Enterprise from './pages/Enterprise';
+import AboutUs from './pages/AboutUs';
+import Contact from './pages/Contact';
 import TicketScan from './pages/TicketScan';
 import ProtectedRoute from './components/ProtectedRoute';
 import LocationTracker from './components/LocationTracker';
@@ -101,6 +106,12 @@ function App() {
           <Route path="/admin/volunteers" element={<ProtectedRoute allowedRoles={['admin']}><VolunteersList /></ProtectedRoute>} />
           <Route path="/admin/finances" element={<ProtectedRoute allowedRoles={['admin']}><GlobalFinances /></ProtectedRoute>} />
           <Route path="/admin/logs" element={<ProtectedRoute allowedRoles={['admin']}><GlobalAuditLogs /></ProtectedRoute>} />
+
+          <Route path="/platform" element={<Platform />} />
+          <Route path="/safety-network" element={<SafetyNetwork />} />
+          <Route path="/enterprise" element={<Enterprise />} />
+          <Route path="/about" element={<AboutUs />} />
+          <Route path="/contact" element={<Contact />} />
 
           <Route path="/" element={<HomePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
