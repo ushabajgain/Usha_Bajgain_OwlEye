@@ -53,8 +53,8 @@ const SOSAlertsList = () => {
             const msg = err.response?.data?.message || "Dispatch failed.";
             setDispatchMessage({ [sosId]: { text: msg, type: 'error' } });
             
-            // If failed, offer manual dispatch
-            if (msg.includes("No available volunteers") || err.response?.status === 404) {
+            // If failed due to no volunteers or busy volunteer, offer manual dispatch
+            if (err.response?.status === 404 || err.response?.status === 409) {
                 setShowManualDispatch(sosId);
                 fetchVolunteers();
             }

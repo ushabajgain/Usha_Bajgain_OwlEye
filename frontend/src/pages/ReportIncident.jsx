@@ -294,13 +294,21 @@ const ReportIncident = () => {
                 setFieldErrors({});
             }, 3000);
         } catch (err) {
-            console.error("Submission failed, saving as draft...", err);
-            // Offline Handling: Save to Draft Queue
-            const drafts = JSON.parse(localStorage.getItem('incident_drafts') || '[]');
-            drafts.push({ ...payload, id: Date.now(), retryCount: 0 });
-            localStorage.setItem('incident_drafts', JSON.stringify(drafts));
+            console.error("Submission failed:", err);
             
-            setStatus({ type: 'error', message: 'Network unstable. Report saved as draft and will retry automatically when online.' });
+            // If the server responded with a validation error (e.g. duplicate), show it directly
+            if (err.response && err.response.data) {
+                const serverMsg = typeof err.response.data === 'string' 
+                    ? err.response.data 
+                    : (Array.isArray(err.response.data) ? err.response.data[0] : (err.response.data.detail || err.response.data.message || JSON.stringify(err.response.data)));
+                setStatus({ type: 'error', message: serverMsg });
+            } else {
+                // Offline / Network error: Save to Draft Queue
+                const drafts = JSON.parse(localStorage.getItem('incident_drafts') || '[]');
+                drafts.push({ ...payload, id: Date.now(), retryCount: 0 });
+                localStorage.setItem('incident_drafts', JSON.stringify(drafts));
+                setStatus({ type: 'error', message: 'Network unstable. Report saved as draft and will retry automatically when online.' });
+            }
             setIsSubmitting(false);
         }
     };
@@ -409,9 +417,9 @@ const ReportIncident = () => {
                                 <textarea style={s.textarea} value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the situation briefly…" />
 
                                 {status.message && (
-                                    <div style={{ marginTop: 20, padding: '12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8, background: status.type === 'success' ? '#f0fdf4' : '#fef2f2', border: `1px solid ${status.type === 'success' ? '#86efac' : '#fecaca'}` }}>
-                                        {status.type === 'success' ? <CheckCircle size={16} color="#16a34a" /> : <AlertTriangle size={16} color="#dc2626" />}
-                                        <span style={{ fontSize: 13, color: status.type === 'success' ? '#16a34a' : '#dc2626', fontWeight: 700 }}>{status.message}</span>
+                                    <div style={{ marginTop: 20, padding: '12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', background: status.type === 'success' ? '#f0fdf4' : '#fef2f2', border: `1px solid ${status.type === 'success' ? '#86efac' : '#fecaca'}` }}>
+                                        {status.type === 'success' ? <CheckCircle size={16} color="#16a34a" style={{ flexShrink: 0 }} /> : <AlertTriangle size={16} color="#dc2626" style={{ flexShrink: 0 }} />}
+                                        <span style={{ fontSize: 13, color: status.type === 'success' ? '#16a34a' : '#dc2626', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{status.message}</span>
                                     </div>
                                 )}
 

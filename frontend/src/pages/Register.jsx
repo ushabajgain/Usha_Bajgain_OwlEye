@@ -100,7 +100,7 @@ const Register = () => {
                 password_confirm: formData.confirmPassword,
                 role: formData.role
             });
-            navigate('/login');
+            navigate('/login', { state: { successMessage: 'Account created successfully! Please log in.' } });
         } catch (err) {
             const serverErrors = {};
             const data = err.response?.data;
@@ -214,8 +214,8 @@ const Register = () => {
     };
 
     const ErrorMsg = ({ msg }) => msg ? (
-        <p style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, marginLeft: 2, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <AlertTriangle size={12} /> {msg}
+        <p style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, marginLeft: 2, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+            <AlertTriangle size={12} style={{ flexShrink: 0 }} /> <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{msg}</span>
         </p>
     ) : null;
 
@@ -237,9 +237,9 @@ const Register = () => {
                         <p style={s.subtitle}>Experience the power of intelligent event safety and monitoring.</p>
 
                         {errors.general && (
-                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <AlertTriangle size={16} color="#dc2626" />
-                                <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{errors.general}</span>
+                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                <AlertTriangle size={16} color="#dc2626" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{errors.general}</span>
                             </div>
                         )}
 

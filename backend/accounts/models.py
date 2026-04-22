@@ -7,7 +7,7 @@ class UserManager(BaseUserManager):
             raise ValueError('The Email field must be set')
         email = self.normalize_email(email).lower()
         if 'username' not in extra_fields:
-            extra_fields['username'] = email.split('@')[0]
+            extra_fields['username'] = email
 
         user = self.model(email=email, **extra_fields)
 

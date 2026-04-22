@@ -13,7 +13,18 @@ const BORDER = C.border;
 const Login = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const successMsg = location.state?.successMessage;
+    const [displaySuccess, setDisplaySuccess] = useState(location.state?.successMessage || '');
+
+    useEffect(() => {
+        if (displaySuccess) {
+            const timer = setTimeout(() => {
+                setDisplaySuccess('');
+                // Clear the state from history so it doesn't reappear on refresh
+                window.history.replaceState({}, document.title);
+            }, 3000); // 3 seconds
+            return () => clearTimeout(timer);
+        }
+    }, [displaySuccess]);
 
     // Auto-redirect if already logged in (Remember Me)
     useEffect(() => {
@@ -32,6 +43,7 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [loginSuccess, setLoginSuccess] = useState(false);
     const [errors, setErrors] = useState({});
 
     const handleLogin = async (e) => {
@@ -76,17 +88,21 @@ const Login = () => {
             storage.setItem('full_name', response.data.full_name || '');
             storage.setItem('profile_image', response.data.profile_image || '');
 
-            if (response.data.role === 'admin') {
-                navigate('/admin/dashboard');
-            } else if (response.data.role === 'organizer') {
-                navigate('/organizer/dashboard');
-            } else if (response.data.role === 'volunteer') {
-                navigate('/volunteer/dashboard');
-            } else if (response.data.role === 'attendee') {
-                navigate('/attendee/dashboard');
-            } else {
-                navigate('/events');
-            }
+            setLoginSuccess(true);
+            
+            setTimeout(() => {
+                if (response.data.role === 'admin') {
+                    navigate('/admin/dashboard');
+                } else if (response.data.role === 'organizer') {
+                    navigate('/organizer/dashboard');
+                } else if (response.data.role === 'volunteer') {
+                    navigate('/volunteer/dashboard');
+                } else if (response.data.role === 'attendee') {
+                    navigate('/attendee/dashboard');
+                } else {
+                    navigate('/events');
+                }
+            }, 800);
         } catch (err) {
             const serverErrors = {};
             const data = err.response?.data;
@@ -194,17 +210,24 @@ const Login = () => {
                         <h1 style={s.title}>Welcome Back</h1>
                         <p style={s.subtitle}>Precise & easy event management.</p>
 
-                        {successMsg && (
-                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <CheckCircle2 size={16} color="#16a34a" />
-                                <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 600 }}>{successMsg}</span>
+                        {displaySuccess && (
+                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                <CheckCircle2 size={16} color="#16a34a" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displaySuccess}</span>
+                            </div>
+                        )}
+
+                        {loginSuccess && (
+                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                <CheckCircle2 size={16} color="#16a34a" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Login successful! Redirecting...</span>
                             </div>
                         )}
 
                         {errors.general && (
-                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <AlertTriangle size={16} color="#dc2626" />
-                                <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{errors.general}</span>
+                            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                <AlertTriangle size={16} color="#dc2626" style={{ flexShrink: 0 }} />
+                                <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{errors.general}</span>
                             </div>
                         )}
 
@@ -228,7 +251,7 @@ const Login = () => {
                                         e.target.previousSibling.style.color = '#9ca3af';
                                     }} />
                             </div>
-                            {errors.email && <p style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, marginLeft: 2, marginBottom: 12 }}>{errors.email}</p>}
+                            {errors.email && <p style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, marginLeft: 2, marginBottom: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{errors.email}</p>}
 
                             <label style={s.label}>Password</label>
                             <div style={{ ...s.inputWrap }}>
@@ -254,7 +277,7 @@ const Login = () => {
                                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
                             </div>
-                            {errors.password && <p style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, marginLeft: 2, marginBottom: 12 }}>{errors.password}</p>}
+                            {errors.password && <p style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, marginLeft: 2, marginBottom: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{errors.password}</p>}
 
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>

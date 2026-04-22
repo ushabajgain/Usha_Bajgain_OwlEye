@@ -397,7 +397,23 @@ class IncidentViewSet(viewsets.ModelViewSet):
         if accuracy and float(accuracy) > 100:
             pass
 
-        # MVP: Duplicate detection disabled for demo
+        # Duplicate detection: prevent same reporter from submitting
+        # a similar incident (same category + same event) within 10 minutes
+        if category and event_id:
+            ten_minutes_ago = timezone.now() - timedelta(minutes=10)
+            existing = Incident.objects.filter(
+                reporter=reporter,
+                category=category,
+                event_id=event_id,
+                created_at__gte=ten_minutes_ago,
+                status__in=['pending', 'verified', 'responding']
+            ).first()
+            if existing:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError(
+                    f"You already reported a similar '{category}' incident for this event."
+                )
+
         duplicate_of = None
         is_duplicate = False
 
@@ -506,6 +522,17 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 if conflict_info and conflict_info['has_conflict']:
                     raise ValidationError({
                         "assigned_volunteer": f"Volunteer is already assigned to {conflict_info['conflicting_event_name']} event."
+                    })
+                
+                # Duplicate incident assignment check
+                active_incident = Incident.objects.filter(
+                    assigned_volunteer=volunteer,
+                    status__in=['pending', 'verified', 'responding'],
+                    is_active=True
+                ).exclude(pk=old_instance.pk).first()
+                if active_incident:
+                    raise ValidationError({
+                        "assigned_volunteer": "This volunteer is already assigned to another incident."
                     })
         
         # ═══════════════════════════════════════════════════════════════════
@@ -839,6 +866,19 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
                     "status_code": "volunteer_busy"
                 }, status=409)
             
+            # ✅ DUPLICATE SOS CHECK: Prevent assigning volunteer who already has an active SOS
+            active_sos = SOSAlert.objects.filter(
+                assigned_volunteer=nearest_volunteer,
+                status__in=['reported', 'assigned', 'in_progress'],
+                is_active=True
+            ).exclude(pk=sos.pk).first()
+            if active_sos:
+                return Response({
+                    "success": False, 
+                    "message": "This volunteer is already assigned to another SOS.",
+                    "status_code": "volunteer_busy"
+                }, status=409)
+            
             sos.assigned_volunteer = nearest_volunteer
             sos.status = 'assigned'
             sos.save()
@@ -955,7 +995,7 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
                     nearest_v = nearby_volunteers[0][0]
                     msg = f"{user.full_name} is sending sos alert to {nearest_v.full_name}"
                 else:
-                    msg = f"{user.full_name} is sending sos alert to organizers"
+                    msg = f"{user.full_name} is sending sos alert to volunteers"
                 
                 send_notification(user, "SOS Sent", msg, 'sos', sos.event)
             except Exception as e:
@@ -1058,9 +1098,26 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
             user_id = member.decode('utf-8') if isinstance(member, bytes) else member
             try:
                 volunteer = User.objects.get(id=user_id)
-                active_cases = SOSAlert.objects.filter(assigned_volunteer=volunteer, status__in=['assigned', 'in_progress']).count()
-                score = dist_meters + (active_cases * 50)
                 
+                # Skip volunteers who already have an active SOS
+                active_sos = SOSAlert.objects.filter(
+                    assigned_volunteer=volunteer,
+                    status__in=['reported', 'assigned', 'in_progress'],
+                    is_active=True
+                ).exists()
+                if active_sos:
+                    continue
+                
+                # Skip volunteers who already have an active incident
+                active_incident = Incident.objects.filter(
+                    assigned_volunteer=volunteer,
+                    status__in=['pending', 'verified', 'responding'],
+                    is_active=True
+                ).exists()
+                if active_incident:
+                    continue
+                
+                score = dist_meters
                 if score < min_score:
                     min_score = score
                     nearest = volunteer
@@ -1122,6 +1179,18 @@ class SOSAlertViewSet(viewsets.ModelViewSet):
                     from rest_framework.exceptions import ValidationError
                     raise ValidationError({
                         "assigned_volunteer": f"Volunteer is already assigned to {conflict_info['conflicting_event_name']} event."
+                    })
+                
+                # Duplicate SOS assignment check
+                active_sos = SOSAlert.objects.filter(
+                    assigned_volunteer=volunteer,
+                    status__in=['reported', 'assigned', 'in_progress'],
+                    is_active=True
+                ).exclude(pk=old_instance.pk).first()
+                if active_sos:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({
+                        "assigned_volunteer": "This volunteer is already assigned to another SOS."
                     })
                 
                 update_fields['assigned_volunteer'] = volunteer
@@ -1336,15 +1405,23 @@ class ResponderLocationViewSet(viewsets.ModelViewSet):
         
         return qs
 
-    def perform_create(self, serializer):
-        # UPSERT logic: check if exists for this user
+    def create(self, request, *args, **kwargs):
+        # UPSERT logic: bypass DRF UniqueValidator for OneToOneField
         existing = ResponderLocation.objects.filter(user=self.request.user).first()
+        
         if existing:
-            serializer.instance = existing
+            serializer = self.get_serializer(existing, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
             responder = serializer.save()
+            self.broadcast_location(responder)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         else:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
             responder = serializer.save(user=self.request.user)
-        self.broadcast_location(responder)
+            self.broadcast_location(responder)
+            from rest_framework import status
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         responder = serializer.save()
@@ -1394,16 +1471,18 @@ class ResponderLocationViewSet(viewsets.ModelViewSet):
             }, status=403)
         
         # UPSERT: Create or update ResponderLocation
+        # Note: user is a OneToOneField, so we must query only by user
         responder, created = ResponderLocation.objects.update_or_create(
             user=volunteer,
-            event=event,
             defaults={
+                'event': event,
                 'status': status,
                 'is_active': True,
-                'latitude': 0.0,  # Volunteer will update their location
+                'latitude': 0.0,
                 'longitude': 0.0
             }
         )
+
         
         serializer = self.get_serializer(responder)
         return Response(serializer.data, status=201 if created else 200)

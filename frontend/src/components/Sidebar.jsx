@@ -96,7 +96,7 @@ const Sidebar = () => {
             if (refresh) await api.post('/accounts/logout/', { refresh });
         } catch (_) { }
         clearAuth();
-        navigate('/login');
+        navigate('/login', { state: { successMessage: 'You have been successfully logged out.' } });
     };
 
     const s = {
